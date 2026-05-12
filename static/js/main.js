@@ -26,10 +26,10 @@ function champIconUrl(champ) {
   return `https://ddragon.leagueoflegends.com/cdn/${ddVersion}/img/champion/${champ.image}`;
 }
 function opggChampionUrl(champId) {
-  return `https://www.op.gg/champions/${champId.toLowerCase()}/counters`;
+  return `https://op.gg/lol/champions/${champId.toLowerCase()}/counters`;
 }
 function opggRuneUrl(champId) {
-  return `https://www.op.gg/champions/${champId.toLowerCase()}/runes`;
+  return `https://op.gg/lol/champions/${champId.toLowerCase()}/runes`;
 }
 
 /* ── Search ── */
@@ -138,37 +138,25 @@ async function loadCounters(champ) {
   }
 }
 
-/* ── Parse OP.GG counter response ── */
+/* ── Parse counter response ── */
+// Backend now returns a standardised list already sorted ascending by win_rate.
+// Each item: {play, win, win_rate, champion:{name, key, image_url}}
 function parseCounters(raw) {
-  // Try multiple response shapes OP.GG might use
   let list = [];
-
   if (Array.isArray(raw)) list = raw;
-  else if (raw.data && Array.isArray(raw.data)) list = raw.data;
-  else if (raw.counters && Array.isArray(raw.counters)) list = raw.counters;
+  else if (raw && Array.isArray(raw.data)) list = raw.data;
 
   return list
-    .map((item) => {
-      const champion = item.champion || item;
-      const champId =
-        champion.key || champion.champion_key || champion.id_name || item.champion_key || item.id_name;
-      const name =
-        champion.name || item.name || champId;
-      const image =
-        champion.image_url || champion.imageUrl || champion.image ||
-        (champId ? `${champId}.png` : null);
-
-      const wr =
-        item.win_rate ?? item.winRate ?? item.win ?? item.stats?.win_rate ?? null;
-      const games =
-        item.game_count ?? item.gameCount ?? item.play_count ?? item.count ?? item.stats?.game_count ?? null;
-
-      if (!champId && !name) return null;
-      return { champId, name, image, winRate: wr, gameCount: games, raw: item };
-    })
-    .filter(Boolean)
-    .filter((c) => c.winRate !== null)
-    .sort((a, b) => a.winRate - b.winRate); // ascending: lowest wr first = best counter
+    .filter((item) => item && item.champion)
+    .map((item) => ({
+      champId: item.champion.key || "",
+      name: item.champion.name || "",
+      image: item.champion.image_url || "",
+      winRate: item.win_rate ?? 50,
+      gameCount: item.play ?? null,
+      raw: item,
+    }));
+  // Already sorted by backend, no re-sort needed
 }
 
 /* ── Render counter grid ── */
@@ -213,12 +201,15 @@ function renderCounters(counters, opponent) {
 }
 
 function resolveChampImg(c) {
-  if (!c.champId) return "";
-  const local = champById[c.champId] || findChampByKey(c.champId);
-  if (local) return champIconUrl(local);
-  // OP.GG CDN fallback
+  // Prefer OP.GG's own CDN image (already a full URL from scraping)
   if (c.image && c.image.startsWith("http")) return c.image;
-  return `https://opgg-static.akamaized.net/meta/images/lol/champion/${c.champId}.png`;
+  // Fallback: Data Dragon
+  if (c.champId) {
+    const local = champById[c.champId] || findChampByKey(c.champId);
+    if (local) return champIconUrl(local);
+    return `https://opgg-static.akamaized.net/meta/images/lol/champion/${c.champId}.png`;
+  }
+  return "";
 }
 
 function findChampByKey(key) {
@@ -273,14 +264,19 @@ async function loadRunes(c) {
 }
 
 /* ── Render runes ── */
+// OP.GG rune data shape (from RSC scraping):
+// rune_pages: [{id, play, pick_rate, builds: [{
+//   primary_perk_style:{id,name,image_url}, perk_sub_style:{...},
+//   main_runes: [[{id,name,image_url,isActive},…], …],   ← rows; pick isActive=true
+//   sub_runes:  [[{id,name,image_url,isActive},…], …],
+//   stat_perks: [[{id,name,image_url,isActive},…], …],
+//   win, play, pick_rate
+// }]}
 function renderRunes(raw, champName, champId) {
   const body = document.getElementById("runes-body");
 
-  // Parse OP.GG rune response shapes
-  let pages = [];
-  if (Array.isArray(raw)) pages = raw;
-  else if (raw.data && Array.isArray(raw.data)) pages = raw.data;
-  else if (raw.rune_pages) pages = raw.rune_pages;
+  // raw is the direct array returned by /api/runes (= rune_pages)
+  const pages = Array.isArray(raw) ? raw : [];
 
   if (!pages.length) {
     body.innerHTML = `<div class="error-msg">暂无符文数据</div>
@@ -288,59 +284,72 @@ function renderRunes(raw, champName, champId) {
     return;
   }
 
-  // Use top rune page (highest pick rate / win rate)
-  const page = pages[0];
+  // Pick the build with highest pick_rate from the top page
+  const topPage = pages[0];
+  const builds = topPage.builds || [];
+  const build = builds[0];
 
-  const primary = page.primary_page || page.primaryPage || page.primary || {};
-  const secondary = page.secondary_page || page.secondaryPage || page.secondary || {};
-  const statPerks = page.stat_perks || page.statPerks || page.stat_shards || [];
-  const wr = page.win_rate ?? page.winRate;
-  const plays = page.play_count ?? page.pickCount ?? page.count;
-
-  const primarySlots = primary.slots || primary.runes || [];
-  const secondarySlots = secondary.slots || secondary.runes || [];
-
-  function renderSlots(slots, isSecondary = false) {
-    return slots.map((slot, si) => {
-      const runes = slot.runes || slot.picks || (Array.isArray(slot) ? slot : [slot]);
-      const pickedRune = runes[0];
-      if (!pickedRune) return "";
-      const isKey = si === 0 && !isSecondary;
-      const img = runeImg(pickedRune);
-      const runeName = pickedRune.name || pickedRune.rune_name || "未知";
-      return `
-        <div class="rune-slot">
-          <img class="rune-icon${isKey ? " keystone" : ""}" src="${img}" alt="${runeName}" onerror="this.style.display='none'" loading="lazy"/>
-          <div>
-            <div class="rune-name">${runeName}</div>
-          </div>
-        </div>`;
-    }).join("");
+  if (!build) {
+    body.innerHTML = `<div class="error-msg">暂无构建数据</div>`;
+    return;
   }
 
-  const statsHtml = wr != null || plays != null
-    ? `<div class="rune-stats">
-        ${wr != null ? `<span>胜率 <span class="rune-stat-val">${(wr <= 1 ? wr * 100 : wr).toFixed(1)}%</span></span>` : ""}
-        ${plays != null ? `<span>场次 <span class="rune-stat-val">${formatNum(plays)}</span></span>` : ""}
-      </div>` : "";
+  const primaryStyle = build.primary_perk_style || {};
+  const secondaryStyle = build.perk_sub_style || {};
+  const mainRunes = build.main_runes || [];   // array of rows, each row = array of rune choices
+  const subRunes = build.sub_runes || [];
+  const statPerks = build.stat_perks || [];
 
-  const statShardsHtml = statPerks.length
-    ? `<div class="stat-shards">${statPerks.slice(0, 3).map((s) => `<div class="stat-shard">${s.name || s}</div>`).join("")}</div>`
-    : "";
+  // Win rate and game count
+  const wr = build.win != null && build.play ? (build.win / build.play * 100) : null;
+  const plays = build.play ?? null;
+
+  function renderRuneRow(row, isKeystone = false) {
+    if (!row || !row.length) return "";
+    const active = row.find((r) => r.isActive) || row[0];
+    if (!active) return "";
+    const cls = isKeystone ? "rune-icon keystone" : "rune-icon";
+    return `
+      <div class="rune-slot">
+        <img class="${cls}" src="${active.image_url || ""}" alt="${active.name || ""}"
+             onerror="this.style.display='none'" loading="lazy"/>
+        <div class="rune-name">${active.name || ""}</div>
+      </div>`;
+  }
+
+  const primaryHtml = mainRunes.map((row, i) => renderRuneRow(row, i === 0)).join("");
+  const secondaryHtml = subRunes.map((row) => renderRuneRow(row, false)).join("");
+
+  const statHtml = statPerks.map((row) => {
+    const active = (row || []).find((r) => r.isActive) || (row || [])[0];
+    return active ? `<div class="stat-shard">${active.name || ""}</div>` : "";
+  }).join("");
+
+  const statsLineHtml = (wr != null || plays != null) ? `
+    <div class="rune-stats">
+      ${wr != null ? `<span>胜率 <span class="rune-stat-val">${wr.toFixed(1)}%</span></span>` : ""}
+      ${plays != null ? `<span>场次 <span class="rune-stat-val">${formatNum(plays)}</span></span>` : ""}
+    </div>` : "";
 
   body.innerHTML = `
-    ${statsHtml}
+    ${statsLineHtml}
     <div class="rune-page">
       <div class="rune-path-block">
-        <div class="rune-path-name">${primary.name || primary.page_name || "主系符文"}</div>
-        ${renderSlots(primarySlots)}
+        <div class="rune-path-name">
+          ${primaryStyle.image_url ? `<img src="${primaryStyle.image_url}" style="width:18px;height:18px;vertical-align:middle;margin-right:4px">` : ""}
+          ${primaryStyle.name || "主系"}
+        </div>
+        ${primaryHtml}
       </div>
       <div class="rune-path-block">
-        <div class="rune-path-name">${secondary.name || secondary.page_name || "副系符文"}</div>
-        ${renderSlots(secondarySlots, true)}
+        <div class="rune-path-name">
+          ${secondaryStyle.image_url ? `<img src="${secondaryStyle.image_url}" style="width:18px;height:18px;vertical-align:middle;margin-right:4px">` : ""}
+          ${secondaryStyle.name || "副系"}
+        </div>
+        ${secondaryHtml}
       </div>
     </div>
-    ${statShardsHtml}`;
+    ${statHtml ? `<div class="stat-shards">${statHtml}</div>` : ""}`;
 }
 
 function runeImg(rune) {

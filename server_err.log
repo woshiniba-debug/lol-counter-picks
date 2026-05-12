@@ -1,0 +1,17 @@
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.142:5000
+Press CTRL+C to quit
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 647-784-635
+127.0.0.1 - - [13/May/2026 04:40:08] "GET /api/counters/Ahri HTTP/1.1" 200 -
+ * Detected change in 'C:\\Users\\LYJ\\lol-counter-picks\\app.py', reloading
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 647-784-635
+ * Detected change in 'C:\\Users\\LYJ\\lol-counter-picks\\app.py', reloading
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 647-784-635
