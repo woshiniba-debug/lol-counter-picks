@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>英雄联盟 Counter位克制建议</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>英雄联盟 Counter 位克制建议</h1>
+    <p>输入对方选择的英雄，获取 OP.GG 克制英雄推荐与符文配置</p>
+  </div>
+</header>
+
+<main>
+
+  <!-- Search -->
+  <div class="search-wrapper">
+    <label class="search-label">选择对方英雄</label>
+    <div class="search-input-row">
+      <input
+        type="text"
+        id="champion-search"
+        placeholder="搜索英雄名称（中文 / 英文皆可）..."
+        autocomplete="off"
+      />
+      <span class="search-icon">🔍</span>
+    </div>
+    <div id="search-dropdown" class="hidden"></div>
+  </div>
+
+  <!-- Selected champion banner -->
+  <div id="selected-banner">
+    <img src="" alt="" />
+    <div class="info">
+      <h3>英雄名</h3>
+      <p>称号</p>
+    </div>
+    <span class="tag">对方选择</span>
+  </div>
+
+  <!-- Counter picks -->
+  <section id="counters-section">
+    <div class="section-title">
+      <span id="counters-title">克制英雄推荐</span>
+    </div>
+    <p style="font-size:0.82rem;color:var(--text-dim);margin-bottom:16px;">
+      以下英雄对 <strong id="opponent-name" style="color:var(--gold-light)"></strong> 的对位胜率较低，排名越靠前克制效果越强，点击英雄卡片查看符文推荐。
+    </p>
+    <div id="counters-grid"></div>
+  </section>
+
+  <!-- Rune recommendations -->
+  <section id="runes-section">
+    <div class="section-title">OP.GG 推荐符文配置</div>
+    <div class="runes-header">
+      <img id="rune-champ-img" src="" alt="" />
+      <div>
+        <h3 id="rune-champ-name"></h3>
+        <p>来源：OP.GG 高胜率符文页</p>
+      </div>
+      <a id="rune-opgg-link" class="opgg-link" href="#" target="_blank" style="margin-left:auto">
+        在 OP.GG 查看 ↗
+      </a>
+    </div>
+    <div id="runes-body"></div>
+  </section>
+
+</main>
+
+<script src="/static/js/main.js"></script>
+<script>
+  // Wire up opponent name in subtitle
+  const origSelect = window.selectOpponent;
+  // patch to also update subtitle span
+  window.selectOpponent = function(champ) {
+    document.getElementById("opponent-name").textContent = champ.name;
+    origSelect(champ);
+  };
+</script>
+
+</body>
+</html>
