@@ -5,6 +5,7 @@ let ddVersion = "";
 let selectedOpponent = null;
 let selectedCounter = null;
 let selectedPosition = "";   // "", "top", "jungle", "mid", "bottom", "support"
+let selectedTier = "";       // "", "gold_minus", "plat_to_emerald", "diamond_plus"
 let lastRawCounters = null;
 let lastRawRunes = null;
 
@@ -15,6 +16,13 @@ const POSITION_LABELS = {
   mid: "中路",
   bottom: "下路",
   support: "辅助",
+};
+
+const TIER_LABELS = {
+  "": "",
+  gold_minus: "黄金及以下",
+  plat_to_emerald: "铂金至翡翠",
+  diamond_plus: "钻石及以上",
 };
 
 /* ── Init ── */
@@ -107,14 +115,16 @@ function selectOpponent(champ) {
   banner.querySelector(".info p").textContent = champ.title;
   banner.classList.add("visible");
 
-  // Show position bar and reset to "全部"
+  // Show position/tier bars and reset to defaults
   setPosition("", false);
+  setTier("", false);
   document.getElementById("position-bar").classList.remove("hidden");
+  document.getElementById("tier-bar").classList.remove("hidden");
 
   // Update subtitle
   document.getElementById("opponent-name").textContent = champ.name;
 
-  loadCounters(champ, selectedPosition);
+  loadCounters(champ, selectedPosition, selectedTier);
 }
 
 /* ── Position selection ── */
@@ -131,7 +141,7 @@ function setPosition(position, reload = true) {
   desc.textContent = position ? `（${POSITION_LABELS[position]}）` : "";
 
   if (reload && selectedOpponent) {
-    loadCounters(selectedOpponent, position);
+    loadCounters(selectedOpponent, position, selectedTier);
   }
 }
 
@@ -140,8 +150,26 @@ document.querySelectorAll(".pos-btn").forEach((btn) => {
   btn.addEventListener("click", () => setPosition(btn.dataset.position));
 });
 
+/* ── Tier selection ── */
+function setTier(tier, reload = true) {
+  selectedTier = tier;
+  document.querySelectorAll(".tier-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tier === tier);
+  });
+  const desc = document.getElementById("tier-desc");
+  desc.textContent = TIER_LABELS[tier] ? `（${TIER_LABELS[tier]}）` : "";
+  if (reload && selectedOpponent) {
+    loadCounters(selectedOpponent, selectedPosition, selectedTier);
+  }
+}
+
+// Wire tier buttons
+document.querySelectorAll(".tier-btn").forEach((btn) => {
+  btn.addEventListener("click", () => setTier(btn.dataset.tier));
+});
+
 /* ── Load counters ── */
-async function loadCounters(champ, position = "") {
+async function loadCounters(champ, position = "", tier = "") {
   const section = document.getElementById("counters-section");
   const grid = document.getElementById("counters-grid");
   const title = document.getElementById("counters-title");
@@ -156,9 +184,13 @@ async function loadCounters(champ, position = "") {
   selectedCounter = null;
   lastRawRunes = null;
 
-  const posParam = position ? `?position=${position}` : "";
+  const params = new URLSearchParams();
+  if (position) params.set("position", position);
+  if (tier) params.set("tier", tier);
+  const qs = params.toString() ? `?${params.toString()}` : "";
+
   try {
-    const res = await fetch(`/api/counters/${champ.id}${posParam}`);
+    const res = await fetch(`/api/counters/${champ.id}${qs}`);
     const json = await res.json();
     if (!json.success) throw new Error(json.error);
 
@@ -181,8 +213,8 @@ async function loadCounters(champ, position = "") {
 }
 
 /* ── Parse counter response ── */
-// Backend now returns a standardised list already sorted ascending by win_rate.
-// Each item: {play, win, win_rate, champion:{name, key, image_url}}
+// Backend returns list sorted ascending by confidence_score (best counter first).
+// Each item: {play, win, win_rate, confidence_score, champion:{name, key, image_url}}
 function parseCounters(raw) {
   let list = [];
   if (Array.isArray(raw)) list = raw;
@@ -195,10 +227,11 @@ function parseCounters(raw) {
       name: item.champion.name || "",
       image: item.champion.image_url || "",
       winRate: item.win_rate ?? 50,
+      confidenceScore: item.confidence_score ?? item.win_rate ?? 50,
       gameCount: item.play ?? null,
       raw: item,
     }));
-  // Already sorted by backend, no re-sort needed
+  // Already sorted by backend (confidence_score ascending)
 }
 
 /* ── Render counter grid ── */
@@ -218,8 +251,10 @@ function renderCounters(counters, opponent) {
 
       const fillPct = Math.min(100, Math.max(0, wrNum));
 
-      const games = c.gameCount !== null
-        ? `${formatNum(c.gameCount)} 场对局`
+      const gameCount = c.gameCount ?? 0;
+      const lowSample = gameCount > 0 && gameCount < 100;
+      const games = gameCount > 0
+        ? `${formatNum(gameCount)} 场对局${lowSample ? " ⚠" : ""}`
         : "";
 
       const imgSrc = resolveChampImg(c);
@@ -269,11 +304,11 @@ function selectCounter(idx) {
   const c = counters[idx];
   if (!c) return;
   selectedCounter = c;
-  loadRunes(c, selectedPosition);
+  loadRunes(c, selectedPosition, selectedTier);
 }
 
 /* ── Load runes ── */
-async function loadRunes(c, position = "") {
+async function loadRunes(c, position = "", tier = "") {
   const section = document.getElementById("runes-section");
   const body = document.getElementById("runes-body");
   section.classList.add("visible");
@@ -295,9 +330,11 @@ async function loadRunes(c, position = "") {
 
   body.innerHTML = loadingHtml();
 
-  const posParam = position ? `?position=${position}` : "";
+  const runeParams = new URLSearchParams();
+  if (position) runeParams.set("position", position);
+  const runeQs = runeParams.toString() ? `?${runeParams.toString()}` : "";
   try {
-    const res = await fetch(`/api/runes/${champId}${posParam}`);
+    const res = await fetch(`/api/runes/${champId}${runeQs}`);
     const json = await res.json();
     if (!json.success) throw new Error(json.error);
 

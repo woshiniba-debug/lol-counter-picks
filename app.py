@@ -148,25 +148,35 @@ def _find_array(combined: str, start: int) -> list | None:
 
 
 VALID_POSITIONS = {"top", "jungle", "mid", "bottom", "support"}
+VALID_TIERS = {"gold_minus", "platinum_plus", "diamond_plus"}
+
+# Bayesian confidence weight: virtual baseline games at 50% WR.
+# Higher → stronger penalty for low sample sizes.
+_CONFIDENCE_WEIGHT = 200
 
 
-def _scrape_counters(champion_id: str, position: str = "") -> list:
+def _confidence_score(win_rate: float, play: int) -> float:
     """
-    Scrape OP.GG counter page and return a list of:
-      {play, win, win_rate, champion: {name, key, image_url}}
-    Sorted ascending by win_rate (lowest = best counter).
+    Bayesian average that pulls low-sample entries toward 50% (no counter advantage).
+    win_rate is in percentage form (e.g. 47.3), not 0–1.
+    Returns a score in the same percentage form; sort ascending for best counters.
     """
+    wr_norm = win_rate / 100.0
+    score = (_CONFIDENCE_WEIGHT * 0.5 + play * wr_norm) / (_CONFIDENCE_WEIGHT + play)
+    return round(score * 100, 4)
+
+
+def _scrape_counters_raw(champion_id: str, position: str, tier: str) -> list:
+    """Fetch and parse one OP.GG counter page. Returns unsorted raw list."""
     pos_path = f"/{position}" if position in VALID_POSITIONS else ""
-    url = f"https://op.gg/lol/champions/{champion_id.lower()}/counters{pos_path}"
+    tier_qs = f"?tier={tier}" if tier in VALID_TIERS else ""
+    url = f"https://op.gg/lol/champions/{champion_id.lower()}/counters{pos_path}{tier_qs}"
     combined = _fetch_rsc_combined(url)
 
-    # Search for the actual numeric win_rate, not the i18n string "Win rate".
-    # Counter data looks like: "play":N,"win":N,"win_rate":N.N,"champion":{...}
     m = re.search(r'"play":\d+,"win":\d+,"win_rate":\d', combined)
     if not m:
         return []
 
-    # Walk left from the match to find the '[' that opens the data array
     bracket_idx = combined.rfind('[', 0, m.start())
     if bracket_idx < 0:
         return []
@@ -180,18 +190,69 @@ def _scrape_counters(champion_id: str, position: str = "") -> list:
         if not isinstance(item, dict) or "champion" not in item:
             continue
         champ = item.get("champion", {})
+        play = item.get("play", 0)
+        wr = item.get("win_rate", 50)
         result.append({
-            "play": item.get("play", 0),
+            "play": play,
             "win": item.get("win", 0),
-            "win_rate": item.get("win_rate", 50),
+            "win_rate": wr,
+            "confidence_score": _confidence_score(wr, play),
             "champion": {
                 "name": champ.get("name", ""),
                 "key": champ.get("key", ""),
                 "image_url": champ.get("image_url", ""),
             },
         })
+    return result
 
-    result.sort(key=lambda x: x["win_rate"])
+
+def _scrape_counters(champion_id: str, position: str = "", tier: str = "") -> list:
+    """
+    Return counter list sorted ascending by confidence_score (best counter first).
+    tier "plat_to_emerald" is derived by subtracting diamond_plus from platinum_plus.
+    """
+    if tier == "plat_to_emerald":
+        return _compute_plat_to_emerald(champion_id, position)
+
+    result = _scrape_counters_raw(champion_id, position, tier)
+    result.sort(key=lambda x: x["confidence_score"])
+    return result
+
+
+def _compute_plat_to_emerald(champion_id: str, position: str) -> list:
+    """
+    Derive Platinum-to-Emerald stats:
+      plat_to_emerald = platinum_plus − diamond_plus
+    Win rate and confidence score are recomputed on the subtracted sample.
+    """
+    plat_list = _scrape_counters_raw(champion_id, position, "platinum_plus")
+    dia_list = _scrape_counters_raw(champion_id, position, "diamond_plus")
+
+    dia_by_key = {item["champion"]["key"]: item for item in dia_list}
+
+    result = []
+    for item in plat_list:
+        key = item["champion"]["key"]
+        d = dia_by_key.get(key)
+
+        if d and item["play"] > d["play"]:
+            play = item["play"] - d["play"]
+            win = item["win"] - d["win"]
+            wr = round(win / play * 100, 2) if play > 0 else 50.0
+        else:
+            play = item["play"]
+            win = item["win"]
+            wr = item["win_rate"]
+
+        result.append({
+            "play": play,
+            "win": win,
+            "win_rate": wr,
+            "confidence_score": _confidence_score(wr, play),
+            "champion": item["champion"],
+        })
+
+    result.sort(key=lambda x: x["confidence_score"])
     return result
 
 
@@ -240,14 +301,17 @@ def api_champions():
 @app.route("/api/counters/<champion_id>")
 def api_counters(champion_id):
     position = request.args.get("position", "").lower().strip()
+    tier = request.args.get("tier", "").lower().strip()
     if position not in VALID_POSITIONS:
         position = ""
-    cache_key = f"counters_{champion_id.lower()}_{position}"
+    if tier not in VALID_TIERS and tier != "plat_to_emerald":
+        tier = ""
+    cache_key = f"counters_{champion_id.lower()}_{position}_{tier}"
     cached = _get_cache(cache_key)
     if cached is not None:
         return jsonify({"success": True, "data": cached})
     try:
-        data = _scrape_counters(champion_id, position)
+        data = _scrape_counters(champion_id, position, tier)
         _set_cache(cache_key, data, ttl=1800)
         return jsonify({"success": True, "data": data})
     except Exception as e:

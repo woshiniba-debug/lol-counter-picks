@@ -67,6 +67,17 @@
     </div>
   </div>
 
+  <!-- Tier selector (shown after champion is selected) -->
+  <div id="tier-bar" class="position-bar hidden">
+    <span class="pos-label">参考段位：</span>
+    <div class="pos-buttons">
+      <button class="tier-btn active" data-tier="">全段位</button>
+      <button class="tier-btn" data-tier="gold_minus">黄金及以下</button>
+      <button class="tier-btn" data-tier="plat_to_emerald">铂金至翡翠</button>
+      <button class="tier-btn" data-tier="diamond_plus">钻石及以上</button>
+    </div>
+  </div>
+
   <!-- Counter picks -->
   <section id="counters-section">
     <div class="section-title">
@@ -75,7 +86,8 @@
     <p style="font-size:0.82rem;color:var(--text-dim);margin-bottom:16px;">
       以下英雄对 <strong id="opponent-name" style="color:var(--gold-light)"></strong>
       <span id="position-desc"></span>
-      的对位胜率较低，排名越靠前克制效果越强，点击英雄卡片查看符文推荐。
+      <span id="tier-desc"></span>
+      的对位胜率较低，排名综合胜率与对局数加权，越靠前克制效果越可靠，点击英雄卡片查看符文推荐。
     </p>
     <div id="counters-grid"></div>
   </section>
