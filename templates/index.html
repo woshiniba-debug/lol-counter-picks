@@ -11,7 +11,7 @@
 <header>
   <div>
     <h1>英雄联盟 Counter 位克制建议</h1>
-    <p>输入对方选择的英雄，获取 OP.GG 克制英雄推荐与符文配置</p>
+    <p>输入对方选择的英雄，选择路线，获取 OP.GG 克制英雄推荐与符文配置</p>
   </div>
 </header>
 
@@ -42,13 +42,40 @@
     <span class="tag">对方选择</span>
   </div>
 
+  <!-- Position selector (shown after champion is selected) -->
+  <div id="position-bar" class="position-bar hidden">
+    <span class="pos-label">对方路线：</span>
+    <div class="pos-buttons">
+      <button class="pos-btn active" data-position="">
+        <span class="pos-icon">◈</span> 全部
+      </button>
+      <button class="pos-btn" data-position="top">
+        <span class="pos-icon">⚔</span> 上路
+      </button>
+      <button class="pos-btn" data-position="jungle">
+        <span class="pos-icon">🌿</span> 打野
+      </button>
+      <button class="pos-btn" data-position="mid">
+        <span class="pos-icon">💠</span> 中路
+      </button>
+      <button class="pos-btn" data-position="bottom">
+        <span class="pos-icon">🏹</span> 下路
+      </button>
+      <button class="pos-btn" data-position="support">
+        <span class="pos-icon">🛡</span> 辅助
+      </button>
+    </div>
+  </div>
+
   <!-- Counter picks -->
   <section id="counters-section">
     <div class="section-title">
       <span id="counters-title">克制英雄推荐</span>
     </div>
     <p style="font-size:0.82rem;color:var(--text-dim);margin-bottom:16px;">
-      以下英雄对 <strong id="opponent-name" style="color:var(--gold-light)"></strong> 的对位胜率较低，排名越靠前克制效果越强，点击英雄卡片查看符文推荐。
+      以下英雄对 <strong id="opponent-name" style="color:var(--gold-light)"></strong>
+      <span id="position-desc"></span>
+      的对位胜率较低，排名越靠前克制效果越强，点击英雄卡片查看符文推荐。
     </p>
     <div id="counters-grid"></div>
   </section>
@@ -60,7 +87,7 @@
       <img id="rune-champ-img" src="" alt="" />
       <div>
         <h3 id="rune-champ-name"></h3>
-        <p>来源：OP.GG 高胜率符文页</p>
+        <p id="rune-position-desc">来源：OP.GG 高胜率符文页</p>
       </div>
       <a id="rune-opgg-link" class="opgg-link" href="#" target="_blank" style="margin-left:auto">
         在 OP.GG 查看 ↗
@@ -72,15 +99,6 @@
 </main>
 
 <script src="/static/js/main.js"></script>
-<script>
-  // Wire up opponent name in subtitle
-  const origSelect = window.selectOpponent;
-  // patch to also update subtitle span
-  window.selectOpponent = function(champ) {
-    document.getElementById("opponent-name").textContent = champ.name;
-    origSelect(champ);
-  };
-</script>
 
 </body>
 </html>

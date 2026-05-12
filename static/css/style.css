@@ -163,6 +163,52 @@ main {
   font-weight: 600;
 }
 
+/* ── Position bar ── */
+.position-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.position-bar.hidden { display: none; }
+.pos-label {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.pos-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pos-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.pos-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold-light);
+  background: var(--bg-card-hover);
+}
+.pos-btn.active {
+  border-color: var(--gold);
+  background: rgba(200, 155, 60, 0.12);
+  color: var(--gold);
+  font-weight: 600;
+}
+.pos-icon { font-size: 0.9rem; }
+
 /* ── Section titles ── */
 .section-title {
   font-size: 1rem;

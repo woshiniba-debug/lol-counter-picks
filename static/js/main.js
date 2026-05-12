@@ -4,8 +4,18 @@ let champById = {};    // id -> champion
 let ddVersion = "";
 let selectedOpponent = null;
 let selectedCounter = null;
+let selectedPosition = "";   // "", "top", "jungle", "mid", "bottom", "support"
 let lastRawCounters = null;
 let lastRawRunes = null;
+
+const POSITION_LABELS = {
+  "": "全部路线",
+  top: "上路",
+  jungle: "打野",
+  mid: "中路",
+  bottom: "下路",
+  support: "辅助",
+};
 
 /* ── Init ── */
 async function init() {
@@ -25,11 +35,13 @@ async function init() {
 function champIconUrl(champ) {
   return `https://ddragon.leagueoflegends.com/cdn/${ddVersion}/img/champion/${champ.image}`;
 }
-function opggChampionUrl(champId) {
-  return `https://op.gg/lol/champions/${champId.toLowerCase()}/counters`;
+function opggChampionUrl(champId, position = "") {
+  const pos = position ? `/${position}` : "";
+  return `https://op.gg/lol/champions/${champId.toLowerCase()}/counters${pos}`;
 }
-function opggRuneUrl(champId) {
-  return `https://op.gg/lol/champions/${champId.toLowerCase()}/runes`;
+function opggRuneUrl(champId, position = "") {
+  const pos = position ? `/${position}` : "";
+  return `https://op.gg/lol/champions/${champId.toLowerCase()}/runes${pos}`;
 }
 
 /* ── Search ── */
@@ -95,17 +107,48 @@ function selectOpponent(champ) {
   banner.querySelector(".info p").textContent = champ.title;
   banner.classList.add("visible");
 
-  loadCounters(champ);
+  // Show position bar and reset to "全部"
+  setPosition("", false);
+  document.getElementById("position-bar").classList.remove("hidden");
+
+  // Update subtitle
+  document.getElementById("opponent-name").textContent = champ.name;
+
+  loadCounters(champ, selectedPosition);
 }
 
+/* ── Position selection ── */
+function setPosition(position, reload = true) {
+  selectedPosition = position;
+
+  // Update button active state
+  document.querySelectorAll(".pos-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.position === position);
+  });
+
+  // Update position description in subtitle
+  const desc = document.getElementById("position-desc");
+  desc.textContent = position ? `（${POSITION_LABELS[position]}）` : "";
+
+  if (reload && selectedOpponent) {
+    loadCounters(selectedOpponent, position);
+  }
+}
+
+// Wire position buttons
+document.querySelectorAll(".pos-btn").forEach((btn) => {
+  btn.addEventListener("click", () => setPosition(btn.dataset.position));
+});
+
 /* ── Load counters ── */
-async function loadCounters(champ) {
+async function loadCounters(champ, position = "") {
   const section = document.getElementById("counters-section");
   const grid = document.getElementById("counters-grid");
   const title = document.getElementById("counters-title");
+  const posLabel = POSITION_LABELS[position] || "全部路线";
 
   section.classList.add("visible");
-  title.textContent = `克制 ${champ.name} 的英雄推荐`;
+  title.textContent = `克制 ${champ.name}（${posLabel}）的英雄推荐`;
   grid.innerHTML = loadingHtml();
 
   // Hide runes
@@ -113,8 +156,9 @@ async function loadCounters(champ) {
   selectedCounter = null;
   lastRawRunes = null;
 
+  const posParam = position ? `?position=${position}` : "";
   try {
-    const res = await fetch(`/api/counters/${champ.id}`);
+    const res = await fetch(`/api/counters/${champ.id}${posParam}`);
     const json = await res.json();
     if (!json.success) throw new Error(json.error);
 
@@ -122,7 +166,7 @@ async function loadCounters(champ) {
     const counters = parseCounters(json.data);
 
     if (!counters.length) {
-      grid.innerHTML = `<div class="error-msg">暂无克制数据，请查看 <a class="opgg-link" href="${opggChampionUrl(champ.id)}" target="_blank">OP.GG</a></div>`;
+      grid.innerHTML = `<div class="error-msg">暂无该路线克制数据，请查看 <a class="opgg-link" href="${opggChampionUrl(champ.id, position)}" target="_blank">OP.GG</a></div>`;
       return;
     }
 
@@ -131,9 +175,7 @@ async function loadCounters(champ) {
     grid.innerHTML = `
       <div>
         <div class="error-msg">${e.message}</div>
-        <a class="opgg-link" href="${opggChampionUrl(champ.id)}" target="_blank">前往 OP.GG 查看</a>
-        <div id="raw-toggle" style="display:block" onclick="toggleRaw('raw-panel')">查看原始数据</div>
-        <div id="raw-panel">${JSON.stringify(lastRawCounters, null, 2)}</div>
+        <a class="opgg-link" href="${opggChampionUrl(champ.id, position)}" target="_blank">前往 OP.GG 查看</a>
       </div>`;
   }
 }
@@ -227,39 +269,42 @@ function selectCounter(idx) {
   const c = counters[idx];
   if (!c) return;
   selectedCounter = c;
-  loadRunes(c);
+  loadRunes(c, selectedPosition);
 }
 
 /* ── Load runes ── */
-async function loadRunes(c) {
+async function loadRunes(c, position = "") {
   const section = document.getElementById("runes-section");
   const body = document.getElementById("runes-body");
   section.classList.add("visible");
 
   const local = c.champId ? (champById[c.champId] || findChampByKey(c.champId)) : null;
   const name = local ? local.name : c.name;
-  const imgSrc = local ? champIconUrl(local) : "";
+  const imgSrc = local ? champIconUrl(local) : (c.image || "");
   const champId = c.champId || (local && local.id) || "";
 
   document.getElementById("rune-champ-img").src = imgSrc;
   document.getElementById("rune-champ-img").alt = name;
   document.getElementById("rune-champ-name").textContent = name;
-  document.getElementById("rune-opgg-link").href = opggRuneUrl(champId);
+  document.getElementById("rune-opgg-link").href = opggRuneUrl(champId, position);
+
+  // Show which position's rune this is
+  const posLabel = POSITION_LABELS[position] || "全部路线";
+  document.getElementById("rune-position-desc").textContent =
+    `来源：OP.GG 高胜率符文页（${posLabel}）`;
 
   body.innerHTML = loadingHtml();
 
+  const posParam = position ? `?position=${position}` : "";
   try {
-    const res = await fetch(`/api/runes/${champId}`);
+    const res = await fetch(`/api/runes/${champId}${posParam}`);
     const json = await res.json();
     if (!json.success) throw new Error(json.error);
 
     lastRawRunes = json.data;
     renderRunes(json.data, name, champId);
   } catch (e) {
-    body.innerHTML = `
-      <div class="error-msg">${e.message}</div>
-      <div id="raw-toggle" style="display:block" onclick="toggleRaw('raw-rune-panel')">查看原始数据</div>
-      <div id="raw-rune-panel" class="raw-panel">${JSON.stringify(lastRawRunes, null, 2)}</div>`;
+    body.innerHTML = `<div class="error-msg">${e.message}</div>`;
   }
 }
 

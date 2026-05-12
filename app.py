@@ -3,7 +3,7 @@ import json
 import time
 
 import requests
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
@@ -147,13 +147,17 @@ def _find_array(combined: str, start: int) -> list | None:
     return None
 
 
-def _scrape_counters(champion_id: str) -> list:
+VALID_POSITIONS = {"top", "jungle", "mid", "bottom", "support"}
+
+
+def _scrape_counters(champion_id: str, position: str = "") -> list:
     """
     Scrape OP.GG counter page and return a list of:
       {play, win, win_rate, champion: {name, key, image_url}}
     Sorted ascending by win_rate (lowest = best counter).
     """
-    url = f"https://op.gg/lol/champions/{champion_id.lower()}/counters"
+    pos_path = f"/{position}" if position in VALID_POSITIONS else ""
+    url = f"https://op.gg/lol/champions/{champion_id.lower()}/counters{pos_path}"
     combined = _fetch_rsc_combined(url)
 
     # Search for the actual numeric win_rate, not the i18n string "Win rate".
@@ -191,13 +195,14 @@ def _scrape_counters(champion_id: str) -> list:
     return result
 
 
-def _scrape_runes(champion_id: str) -> list:
+def _scrape_runes(champion_id: str, position: str = "") -> list:
     """
     Scrape OP.GG rune page and return rune_pages list.
     Each page has: id, play, pick_rate, builds[{primary_perk_style, perk_sub_style,
     main_runes, sub_runes, stat_perks, win, play, pick_rate}]
     """
-    url = f"https://op.gg/lol/champions/{champion_id.lower()}/runes"
+    pos_path = f"/{position}" if position in VALID_POSITIONS else ""
+    url = f"https://op.gg/lol/champions/{champion_id.lower()}/runes{pos_path}"
     combined = _fetch_rsc_combined(url)
 
     # "rune_pages" appears as a key followed by an array containing rune page objects.
@@ -234,12 +239,15 @@ def api_champions():
 
 @app.route("/api/counters/<champion_id>")
 def api_counters(champion_id):
-    cache_key = f"counters_{champion_id.lower()}"
+    position = request.args.get("position", "").lower().strip()
+    if position not in VALID_POSITIONS:
+        position = ""
+    cache_key = f"counters_{champion_id.lower()}_{position}"
     cached = _get_cache(cache_key)
     if cached is not None:
         return jsonify({"success": True, "data": cached})
     try:
-        data = _scrape_counters(champion_id)
+        data = _scrape_counters(champion_id, position)
         _set_cache(cache_key, data, ttl=1800)
         return jsonify({"success": True, "data": data})
     except Exception as e:
@@ -248,12 +256,15 @@ def api_counters(champion_id):
 
 @app.route("/api/runes/<champion_id>")
 def api_runes(champion_id):
-    cache_key = f"runes_{champion_id.lower()}"
+    position = request.args.get("position", "").lower().strip()
+    if position not in VALID_POSITIONS:
+        position = ""
+    cache_key = f"runes_{champion_id.lower()}_{position}"
     cached = _get_cache(cache_key)
     if cached is not None:
         return jsonify({"success": True, "data": cached})
     try:
-        data = _scrape_runes(champion_id)
+        data = _scrape_runes(champion_id, position)
         _set_cache(cache_key, data, ttl=1800)
         return jsonify({"success": True, "data": data})
     except Exception as e:
