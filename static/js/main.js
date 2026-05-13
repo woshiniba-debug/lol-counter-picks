@@ -38,10 +38,13 @@
 
   const SEARCH_DEBOUNCE_MS = 120;
   const SEARCH_LIMIT = 12;
-  // Win-rate thresholds for counter classification. Symmetric around 50%
-  // because Bayesian-adjusted WRs cluster tighter than raw ones.
-  const WR_GOOD_BELOW = 46;
-  const WR_BAD_ABOVE = 54;
+  // Win-rate thresholds (operate on the displayed value, which is the
+  // opponent's WR vs the counter pick).
+  //   < 49 %  → good (counter is strong)   → green
+  //   49–52 % → neutral                    → yellow
+  //   > 52 %  → bad (counter is weak)      → red
+  const WR_GOOD_BELOW = 49;
+  const WR_BAD_ABOVE = 52;
   const LOW_SAMPLE_THRESHOLD = 100;
 
   const PLACEHOLDER_IMG = "/static/img/placeholder.png";
@@ -69,6 +72,7 @@
   const dom = {};
 
   function cacheDom() {
+    dom.searchWrapper = document.querySelector(".search-wrapper");
     dom.searchInput   = document.getElementById("champion-search");
     dom.dropdown      = document.getElementById("search-dropdown");
     dom.banner        = document.getElementById("selected-banner");
@@ -171,6 +175,13 @@
     cacheDom();
     wireEvents();
 
+    // Show the inline search spinner while we fetch the champion list +
+    // build the pinyin index. The whole thing usually finishes in <500ms
+    // (cached) — the spinner mostly matters on cold loads / slow networks.
+    dom.searchWrapper.classList.add("is-loading");
+    dom.searchInput.disabled = true;
+    dom.searchInput.placeholder = "正在加载英雄列表…";
+
     try {
       const res = await fetch("/api/champions");
       const json = await res.json();
@@ -184,10 +195,15 @@
       state.searchIndex = (typeof PinyinSearch !== "undefined")
         ? PinyinSearch.buildIndex(state.champions)
         : null;
+
+      dom.searchInput.disabled = false;
+      dom.searchInput.placeholder = "搜索英雄名称（中文 / 英文 / 拼音皆可）...";
     } catch (e) {
       console.error("加载英雄列表失败:", e);
       dom.searchInput.placeholder = "英雄列表加载失败，请刷新重试";
       dom.searchInput.disabled = true;
+    } finally {
+      dom.searchWrapper.classList.remove("is-loading");
     }
   }
 
@@ -231,6 +247,35 @@
     dom.countersGrid.addEventListener("click", (e) => {
       const card = e.target.closest(".counter-card");
       if (!card) return;
+      const idx = parseInt(card.dataset.idx, 10);
+      if (!Number.isNaN(idx)) selectCounter(idx);
+    });
+
+    // Cursor-tracking hover effect: set --mx / --my custom properties so
+    // the CSS radial-gradient highlight follows the mouse. Delegated and
+    // rAF-throttled to keep the cost negligible even on huge grids.
+    let trackingRaf = 0;
+    dom.countersGrid.addEventListener("pointermove", (e) => {
+      const card = e.target.closest(".counter-card");
+      if (!card) return;
+      if (trackingRaf) return;
+      trackingRaf = requestAnimationFrame(() => {
+        const rect = card.getBoundingClientRect();
+        const mx = ((e.clientX - rect.left) / rect.width) * 100;
+        const my = ((e.clientY - rect.top) / rect.height) * 100;
+        card.style.setProperty("--mx", mx + "%");
+        card.style.setProperty("--my", my + "%");
+        trackingRaf = 0;
+      });
+    });
+
+    // Keyboard activation for counter cards (Enter / Space) since the
+    // cards are role="button".
+    dom.countersGrid.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const card = e.target.closest(".counter-card");
+      if (!card) return;
+      e.preventDefault();
       const idx = parseInt(card.dataset.idx, 10);
       if (!Number.isNaN(idx)) selectCounter(idx);
     });
@@ -400,10 +445,13 @@
     const wrNum = wr <= 1 ? wr * 100 : wr;
     const wrPct = wrNum.toFixed(1);
 
+    // Class + colour for both the value text and the bar fill.
+    // Colours mirror the CSS --wr-* tokens; kept inline because the bar
+    // fill uses an inline style attribute for the dynamic width.
     let wrClass = "neutral";
-    let fillColor = "#c89b3c";
-    if (wrNum < WR_GOOD_BELOW) { wrClass = "good"; fillColor = "#00c853"; }
-    else if (wrNum > WR_BAD_ABOVE) { wrClass = "bad"; fillColor = "#e53935"; }
+    let fillColor = "#f5c518";
+    if (wrNum < WR_GOOD_BELOW)      { wrClass = "good"; fillColor = "#2ecc71"; }
+    else if (wrNum > WR_BAD_ABOVE)  { wrClass = "bad";  fillColor = "#ff5252"; }
     const fillPct = Math.min(100, Math.max(0, wrNum));
 
     const gameCount = c.gameCount ?? 0;
@@ -551,18 +599,26 @@
     const active = row.find((r) => r.isActive) || row[0];
     if (!active) return "";
     const cls = isKeystone ? "rune-icon keystone" : "rune-icon";
+    const name = active.name || "";
+    // `data-tooltip` on the wrapping span lets the CSS show a hover bubble
+    // with the full rune name — useful when the name truncates on mobile
+    // or the user just wants confirmation of which rune the icon is.
     return `
       <div class="rune-slot">
-        <img class="${cls}" src="${escapeHtml(active.image_url || "")}"
-             alt="${escapeHtml(active.name || "")}"
-             onerror="this.style.display='none'" loading="lazy"/>
-        <div class="rune-name">${escapeHtml(active.name || "")}</div>
+        <span data-tooltip="${escapeHtml(name)}" tabindex="0">
+          <img class="${cls}" src="${escapeHtml(active.image_url || "")}"
+               alt="${escapeHtml(name)}"
+               onerror="this.style.display='none'" loading="lazy"/>
+        </span>
+        <div class="rune-name">${escapeHtml(name)}</div>
       </div>`;
   }
 
   function renderStatShard(row) {
     const active = (row || []).find((r) => r.isActive) || (row || [])[0];
-    return active ? `<div class="stat-shard">${escapeHtml(active.name || "")}</div>` : "";
+    if (!active) return "";
+    const name = active.name || "";
+    return `<div class="stat-shard" data-tooltip="${escapeHtml(name)}" tabindex="0">${escapeHtml(name)}</div>`;
   }
 
   /* ── Boot ──────────────────────────────────────────────────────────── */

@@ -42,6 +42,9 @@
         aria-autocomplete="list"
       />
       <span class="search-icon" aria-hidden="true">🔍</span>
+      <!-- Visible only while .search-wrapper.is-loading is set (during the
+           initial champion-list fetch). CSS handles the cross-fade. -->
+      <span class="search-spinner" role="status" aria-label="加载中"></span>
     </div>
     <!-- role="listbox" lets screen readers identify the dropdown as a
          selectable list rather than a generic floating div. -->
