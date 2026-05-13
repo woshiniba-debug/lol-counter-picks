@@ -182,7 +182,7 @@ main {
   gap: 8px;
   flex-wrap: wrap;
 }
-.pos-btn {
+.pos-btn, .tier-btn {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -196,12 +196,12 @@ main {
   transition: border-color 0.15s, background 0.15s, color 0.15s;
   white-space: nowrap;
 }
-.pos-btn:hover {
+.pos-btn:hover, .tier-btn:hover {
   border-color: var(--gold);
   color: var(--gold-light);
   background: var(--bg-card-hover);
 }
-.pos-btn.active {
+.pos-btn.active, .tier-btn.active {
   border-color: var(--gold);
   background: rgba(200, 155, 60, 0.12);
   color: var(--gold);
@@ -419,6 +419,47 @@ main {
   padding: 14px 20px;
   color: var(--red);
   font-size: 0.88rem;
+}
+
+/* ── Mobile responsive ── */
+@media (max-width: 600px) {
+  header {
+    padding: 14px 16px;
+    gap: 10px;
+  }
+  header h1 { font-size: 1.1rem; }
+  header p  { font-size: 0.78rem; }
+
+  main { padding: 16px 12px; }
+
+  .search-wrapper { margin-bottom: 20px; }
+
+  #search-dropdown { max-height: 220px; }
+
+  #selected-banner {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+  #selected-banner img { width: 50px; height: 50px; }
+  #selected-banner .info h3 { font-size: 0.95rem; }
+  #selected-banner .tag { font-size: 0.72rem; padding: 3px 8px; }
+
+  .position-bar { gap: 8px; margin-bottom: 14px; }
+  .pos-btn  { padding: 9px 11px; font-size: 0.8rem; }
+  .tier-btn { padding: 9px 11px; font-size: 0.8rem; }
+
+  #counters-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .counter-card { padding: 12px 10px; }
+  .counter-card img { width: 56px; height: 56px; }
+  .counter-card .champ-name { font-size: 0.85rem; }
+  .wr-value { font-size: 1rem; }
+
+  #runes-section.visible { padding: 16px 14px; }
+  .rune-path-block { min-width: 100%; }
+  .stat-shards { flex-wrap: wrap; gap: 8px; }
 }
 
 /* ── Raw data debug ── */

@@ -59,13 +59,18 @@ const dropdown = document.getElementById("search-dropdown");
 searchInput.addEventListener("input", () => {
   const q = searchInput.value.trim();
   if (!q) { dropdown.classList.add("hidden"); return; }
+  const qLower = q.toLowerCase();
   const matches = allChampions
-    .filter(
-      (c) =>
-        c.name.includes(q) ||
-        c.id.toLowerCase().includes(q.toLowerCase()) ||
-        c.title.includes(q)
-    )
+    .filter((c) => {
+      if (c.name.includes(q) || c.id.toLowerCase().includes(qLower) || c.title.includes(q)) return true;
+      // Pinyin search
+      const py = CHAMPION_PINYIN[c.id];
+      if (py) {
+        const [full, abbr] = py.split("|");
+        if (full.includes(qLower) || abbr.includes(qLower)) return true;
+      }
+      return false;
+    })
     .slice(0, 12);
   renderDropdown(matches);
 });
