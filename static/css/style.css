@@ -1,42 +1,97 @@
+/* ╔════════════════════════════════════════════════════════════════╗
+   ║  LOL Counter Picks — stylesheet                                ║
+   ║                                                                ║
+   ║  Sections                                                      ║
+   ║    1. Design tokens (custom properties)                        ║
+   ║    2. Base + reset                                             ║
+   ║    3. Header                                                   ║
+   ║    4. Layout                                                   ║
+   ║    5. Search input + dropdown                                  ║
+   ║    6. Selected-champion banner                                 ║
+   ║    7. Position / tier selector bars                            ║
+   ║    8. Counter section + cards                                  ║
+   ║    9. Runes section                                            ║
+   ║   10. Loading / error                                          ║
+   ║   11. Reusable utilities (opgg link)                           ║
+   ║   12. Responsive (tablet, mobile)                              ║
+   ║   13. Accessibility (focus, reduced motion)                    ║
+   ╚════════════════════════════════════════════════════════════════╝ */
+
+
+/* ── 1. Design tokens ─────────────────────────────────────────────────────
+   Centralising colours, spacing, and radii here means a future theme
+   switch can flip a handful of variables instead of touching every rule. */
 :root {
-  --bg-deep: #040d1a;
-  --bg-panel: #0a1628;
-  --bg-card: #0e1c35;
-  --bg-card-hover: #152344;
-  --gold: #c89b3c;
-  --gold-light: #f0e6c0;
-  --blue: #0bc4e3;
-  --blue-dim: #1a5f7a;
-  --green: #00c853;
-  --red: #e53935;
-  --text: #c8d0d8;
-  --text-dim: #8898aa;
-  --border: #1e3055;
+  /* Surface */
+  --bg-deep:        #040d1a;
+  --bg-panel:       #0a1628;
+  --bg-card:        #0e1c35;
+  --bg-card-hover:  #152344;
+
+  /* Brand */
+  --gold:           #c89b3c;
+  --gold-light:     #f0e6c0;
+  --blue:           #0bc4e3;
+  --blue-dim:       #1a5f7a;
+
+  /* Semantic */
+  --green:          #00c853;
+  --red:            #e53935;
+
+  /* Text */
+  --text:           #c8d0d8;
+  --text-dim:       #8898aa;
+
+  /* Lines */
+  --border:        #1e3055;
+
+  /* Spacing scale (used in a few spots; full adoption is incremental) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 20px;
+
+  /* Motion */
+  --t-fast: 0.15s;
+  --t-med:  0.25s;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── 2. Base + reset ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
 
 body {
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   background: var(--bg-deep);
   color: var(--text);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* ── Header ── */
+img { max-width: 100%; display: block; }
+
+
+/* ── 3. Header ────────────────────────────────────────────────────────── */
 header {
   background: linear-gradient(180deg, #0a1628 0%, #040d1a 100%);
   border-bottom: 2px solid var(--gold);
-  padding: 20px 40px;
+  padding: var(--space-5) 40px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
 }
-header .logo {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-}
+header .logo { width: 48px; height: 48px; object-fit: contain; }
 header h1 {
   font-size: 1.5rem;
   color: var(--gold);
@@ -49,14 +104,16 @@ header p {
   margin-top: 2px;
 }
 
-/* ── Main layout ── */
+
+/* ── 4. Layout ────────────────────────────────────────────────────────── */
 main {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 32px 24px;
+  padding: 32px var(--space-6);
 }
 
-/* ── Search ── */
+
+/* ── 5. Search input + dropdown ───────────────────────────────────────── */
 .search-wrapper {
   position: relative;
   max-width: 520px;
@@ -67,29 +124,25 @@ main {
   text-align: center;
   font-size: 0.9rem;
   color: var(--gold);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
   letter-spacing: 0.5px;
 }
-.search-input-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
+.search-input-row { position: relative; display: flex; align-items: center; }
 #champion-search {
   width: 100%;
-  padding: 14px 48px 14px 20px;
+  padding: 14px 48px 14px var(--space-5);
   background: var(--bg-panel);
   border: 1.5px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text);
   font-size: 1rem;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color var(--t-fast);
 }
-#champion-search:focus {
-  border-color: var(--gold);
-}
+#champion-search:focus     { border-color: var(--gold); }
+#champion-search:disabled  { opacity: 0.6; cursor: not-allowed; }
 #champion-search::placeholder { color: var(--text-dim); }
+
 .search-icon {
   position: absolute;
   right: 14px;
@@ -98,7 +151,6 @@ main {
   pointer-events: none;
 }
 
-/* ── Dropdown ── */
 #search-dropdown {
   position: absolute;
   top: calc(100% + 6px);
@@ -106,22 +158,28 @@ main {
   right: 0;
   background: var(--bg-panel);
   border: 1.5px solid var(--gold);
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: var(--radius-md);
+  overflow: hidden auto;
   z-index: 100;
   max-height: 340px;
-  overflow-y: auto;
+  /* Soft shadow gives the floating panel actual depth */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 #search-dropdown.hidden { display: none; }
+
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: var(--space-3);
+  padding: 10px var(--space-4);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--t-fast);
 }
-.dropdown-item:hover { background: var(--bg-card-hover); }
+.dropdown-item:hover,
+.dropdown-item:focus-visible {
+  background: var(--bg-card-hover);
+  outline: none;
+}
 .dropdown-item img {
   width: 36px;
   height: 36px;
@@ -129,18 +187,19 @@ main {
   border: 1.5px solid var(--border);
   object-fit: cover;
 }
-.dropdown-item .champ-name { font-size: 0.95rem; color: var(--text); }
+.dropdown-item .champ-name  { font-size: 0.95rem; color: var(--text); }
 .dropdown-item .champ-title { font-size: 0.78rem; color: var(--text-dim); }
 
-/* ── Selected champion banner ── */
+
+/* ── 6. Selected champion banner ──────────────────────────────────────── */
 #selected-banner {
   display: none;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
   background: var(--bg-panel);
   border: 1.5px solid var(--border);
   border-radius: 10px;
-  padding: 16px 24px;
+  padding: var(--space-4) var(--space-6);
   margin-bottom: 28px;
 }
 #selected-banner.visible { display: flex; }
@@ -152,26 +211,28 @@ main {
   object-fit: cover;
 }
 #selected-banner .info h3 { font-size: 1.1rem; color: var(--gold-light); }
-#selected-banner .info p { font-size: 0.82rem; color: var(--text-dim); margin-top: 2px; }
+#selected-banner .info p  { font-size: 0.82rem; color: var(--text-dim); margin-top: 2px; }
 #selected-banner .tag {
   margin-left: auto;
   background: var(--blue-dim);
   color: var(--blue);
-  border-radius: 6px;
-  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  padding: 4px var(--space-3);
   font-size: 0.8rem;
   font-weight: 600;
 }
 
-/* ── Position bar ── */
+
+/* ── 7. Position / tier selector bars ─────────────────────────────────── */
 .position-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
   flex-wrap: wrap;
 }
 .position-bar.hidden { display: none; }
+
 .pos-label {
   font-size: 0.85rem;
   color: var(--text-dim);
@@ -179,22 +240,24 @@ main {
 }
 .pos-buttons {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 .pos-btn, .tier-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 7px 14px;
   background: var(--bg-card);
   border: 1.5px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   color: var(--text-dim);
   font-size: 0.85rem;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  transition: border-color var(--t-fast), background var(--t-fast), color var(--t-fast);
   white-space: nowrap;
+  /* Native <button> ships system styles we don't want */
+  font: inherit;
 }
 .pos-btn:hover, .tier-btn:hover {
   border-color: var(--gold);
@@ -209,15 +272,16 @@ main {
 }
 .pos-icon { font-size: 0.9rem; }
 
-/* ── Section titles ── */
+
+/* ── 8. Counter section + cards ───────────────────────────────────────── */
 .section-title {
   font-size: 1rem;
   color: var(--gold);
   letter-spacing: 0.5px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .section-title::before {
   content: "";
@@ -228,24 +292,33 @@ main {
   border-radius: 2px;
 }
 
-/* ── Counter grid ── */
 #counters-section { display: none; }
 #counters-section.visible { display: block; }
+
+/* Subtitle below the counters section title; previously inline-styled. */
+.counters-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-bottom: var(--space-4);
+}
+.counters-subtitle strong { color: var(--gold-light); font-weight: 600; }
+
 #counters-grid {
   display: grid;
+  /* auto-fill + minmax → fluid card columns; cards never get too narrow
+     for the win-rate label, never too wide for visual balance. */
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 14px;
   margin-bottom: 36px;
 }
 
-/* ── Counter card ── */
 .counter-card {
   background: var(--bg-card);
   border: 1.5px solid var(--border);
   border-radius: 10px;
-  padding: 16px;
+  padding: var(--space-4);
   cursor: pointer;
-  transition: border-color 0.2s, transform 0.15s, background 0.2s;
+  transition: border-color var(--t-med), transform var(--t-fast), background var(--t-med);
   text-align: center;
 }
 .counter-card:hover {
@@ -256,6 +329,8 @@ main {
 .counter-card.selected {
   border-color: var(--gold);
   background: var(--bg-card-hover);
+  /* Subtle glow distinguishes the active selection from a hover state */
+  box-shadow: 0 0 0 1px var(--gold) inset;
 }
 .counter-card img {
   width: 72px;
@@ -263,13 +338,13 @@ main {
   border-radius: 50%;
   border: 2px solid var(--border);
   object-fit: cover;
-  display: block;
   margin: 0 auto 10px;
 }
+.counter-card-inner { position: relative; }
 .counter-card .rank-badge {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: var(--space-2);
+  left: var(--space-2);
   background: var(--gold);
   color: #000;
   font-size: 0.68rem;
@@ -281,29 +356,28 @@ main {
   align-items: center;
   justify-content: center;
 }
-.counter-card-inner { position: relative; }
 .counter-card .champ-name {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--gold-light);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
-.wr-label { font-size: 0.75rem; color: var(--text-dim); margin-bottom: 4px; }
+.wr-label { font-size: 0.75rem; color: var(--text-dim); margin-bottom: var(--space-1); }
 .wr-value {
   font-size: 1.15rem;
   font-weight: 700;
   margin-bottom: 6px;
 }
-.wr-value.good { color: var(--green); }
+.wr-value.good    { color: var(--green); }
 .wr-value.neutral { color: var(--gold); }
-.wr-value.bad { color: var(--red); }
+.wr-value.bad     { color: var(--red); }
 
 .wr-bar-bg {
   width: 100%;
   height: 4px;
   background: var(--border);
   border-radius: 2px;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
   overflow: hidden;
 }
 .wr-bar-fill {
@@ -313,20 +387,21 @@ main {
 }
 .games-count { font-size: 0.75rem; color: var(--text-dim); }
 
-/* ── Runes section ── */
+
+/* ── 9. Runes section ─────────────────────────────────────────────────── */
 #runes-section { display: none; }
 #runes-section.visible {
   display: block;
   background: var(--bg-panel);
   border: 1.5px solid var(--border);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
 }
 .runes-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
 }
 .runes-header img {
   width: 44px;
@@ -336,11 +411,11 @@ main {
   object-fit: cover;
 }
 .runes-header h3 { font-size: 1rem; color: var(--gold-light); }
-.runes-header p { font-size: 0.8rem; color: var(--text-dim); }
+.runes-header p  { font-size: 0.8rem; color: var(--text-dim); }
 
 .rune-page {
   display: flex;
-  gap: 24px;
+  gap: var(--space-6);
   flex-wrap: wrap;
 }
 .rune-path-block { flex: 1; min-width: 200px; }
@@ -348,9 +423,16 @@ main {
   font-size: 0.82rem;
   color: var(--blue);
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
   letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
+/* Was previously written inline in main.js — moved to CSS so styling lives
+   in one place and the markup stays presentational-attribute-free. */
+.rune-path-icon { width: 18px; height: 18px; vertical-align: middle; }
+
 .rune-slot {
   display: flex;
   align-items: center;
@@ -373,15 +455,15 @@ main {
 .stat-shards {
   display: flex;
   gap: 10px;
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--border);
 }
 .stat-shard {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  padding: 6px var(--space-3);
   font-size: 0.8rem;
   color: var(--text);
 }
@@ -391,11 +473,12 @@ main {
   font-size: 0.8rem;
   color: var(--text-dim);
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
 }
 .rune-stat-val { color: var(--text); font-weight: 600; }
 
-/* ── Loading / Error ── */
+
+/* ── 10. Loading / error ──────────────────────────────────────────────── */
 .loading {
   text-align: center;
   padding: 40px;
@@ -408,96 +491,103 @@ main {
   border-top-color: var(--gold);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-  margin: 0 auto 12px;
+  margin: 0 auto var(--space-3);
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .error-msg {
   background: rgba(229, 57, 53, 0.1);
   border: 1px solid var(--red);
-  border-radius: 8px;
-  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  padding: 14px var(--space-5);
   color: var(--red);
   font-size: 0.88rem;
 }
 
-/* ── Mobile responsive ── */
-@media (max-width: 600px) {
-  header {
-    padding: 14px 16px;
-    gap: 10px;
-  }
-  header h1 { font-size: 1.1rem; }
-  header p  { font-size: 0.78rem; }
 
-  main { padding: 16px 12px; }
-
-  .search-wrapper { margin-bottom: 20px; }
-
-  #search-dropdown { max-height: 220px; }
-
-  #selected-banner {
-    padding: 12px 14px;
-    gap: 12px;
-  }
-  #selected-banner img { width: 50px; height: 50px; }
-  #selected-banner .info h3 { font-size: 0.95rem; }
-  #selected-banner .tag { font-size: 0.72rem; padding: 3px 8px; }
-
-  .position-bar { gap: 8px; margin-bottom: 14px; }
-  .pos-btn  { padding: 9px 11px; font-size: 0.8rem; }
-  .tier-btn { padding: 9px 11px; font-size: 0.8rem; }
-
-  #counters-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-  }
-  .counter-card { padding: 12px 10px; }
-  .counter-card img { width: 56px; height: 56px; }
-  .counter-card .champ-name { font-size: 0.85rem; }
-  .wr-value { font-size: 1rem; }
-
-  #runes-section.visible { padding: 16px 14px; }
-  .rune-path-block { min-width: 100%; }
-  .stat-shards { flex-wrap: wrap; gap: 8px; }
-}
-
-/* ── Raw data debug ── */
-#raw-toggle {
-  font-size: 0.78rem;
-  color: var(--text-dim);
-  cursor: pointer;
-  text-decoration: underline;
-  display: none;
-  margin-top: 8px;
-}
-#raw-panel {
-  display: none;
-  background: #000;
-  border-radius: 6px;
-  padding: 12px;
-  font-size: 0.75rem;
-  font-family: monospace;
-  color: #7ec8a4;
-  max-height: 300px;
-  overflow-y: auto;
-  margin-top: 8px;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-/* ── OP.GG link ── */
+/* ── 11. Reusable utilities ───────────────────────────────────────────── */
 .opgg-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 16px;
+  margin-top: var(--space-4);
   font-size: 0.82rem;
   color: var(--blue);
   text-decoration: none;
   padding: 6px 14px;
   border: 1px solid var(--blue-dim);
-  border-radius: 6px;
-  transition: background 0.15s;
+  border-radius: var(--radius-sm);
+  transition: background var(--t-fast);
 }
 .opgg-link:hover { background: rgba(11, 196, 227, 0.1); }
+
+
+/* ── 12. Responsive ───────────────────────────────────────────────────── */
+/* Tablet — narrow the gutters, shrink the auto-fill min slightly.
+   Previously the layout jumped straight from desktop to mobile at 600px,
+   leaving a awkward gap of cramped four-column layouts in the 600–900 band. */
+@media (max-width: 960px) {
+  main { padding: var(--space-5) var(--space-4); }
+  #counters-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+}
+
+@media (max-width: 600px) {
+  header {
+    padding: 14px var(--space-4);
+    gap: 10px;
+  }
+  header h1 { font-size: 1.1rem; }
+  header p  { font-size: 0.78rem; }
+
+  main { padding: var(--space-4) var(--space-3); }
+
+  .search-wrapper { margin-bottom: var(--space-5); }
+  #search-dropdown { max-height: 220px; }
+
+  #selected-banner { padding: var(--space-3) 14px; gap: var(--space-3); }
+  #selected-banner img { width: 50px; height: 50px; }
+  #selected-banner .info h3 { font-size: 0.95rem; }
+  #selected-banner .tag { font-size: 0.72rem; padding: 3px var(--space-2); }
+
+  .position-bar { gap: var(--space-2); margin-bottom: 14px; }
+  .pos-btn, .tier-btn { padding: 9px 11px; font-size: 0.8rem; }
+
+  /* Two columns on phones (instead of auto-fill which would single-column
+     too early on very narrow viewports). */
+  #counters-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .counter-card { padding: var(--space-3) 10px; }
+  .counter-card img { width: 56px; height: 56px; }
+  .counter-card .champ-name { font-size: 0.85rem; }
+  .wr-value { font-size: 1rem; }
+
+  #runes-section.visible { padding: var(--space-4) 14px; }
+  .rune-path-block { min-width: 100%; }
+  .stat-shards { flex-wrap: wrap; gap: var(--space-2); }
+}
+
+
+/* ── 13. Accessibility ────────────────────────────────────────────────── */
+/* Keyboard-only users need a visible focus ring; the original CSS removed
+   outlines via the `outline: none` on .search-input without offering a
+   replacement, which is a WCAG 2.4.7 fail. */
+:where(button, a, [tabindex], input):focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Respect users who've requested less motion. The spinner becomes
+   pulse-opacity instead of a continuous rotation; bar/transform animations
+   collapse to a no-op. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .loading .spinner { animation: none; opacity: 0.6; }
+}

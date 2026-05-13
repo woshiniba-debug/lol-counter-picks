@@ -174,3 +174,100 @@ const CHAMPION_PINYIN = {
   "Zoe": "muguangxingling|mgxl",
   "Zyra": "jingjizhixing|jjzx",
 };
+
+/* ──────────────────────────────────────────────────────────────────────
+ * PinyinSearch — scored, prefix-aware champion search
+ *
+ * Why a separate index instead of filtering CHAMPION_PINYIN on every
+ * keystroke:
+ *   - Building the index once (O(N)) lets us pre-lowercase every field
+ *     and avoid per-keystroke `.split('|')` / `.toLowerCase()` work.
+ *   - Returning *scored* matches means a query like "ya" surfaces Yasuo
+ *     (id prefix) before Diana (substring of "jiaoyuenvshen") — the
+ *     original `.includes()` filter ranked all matches equally and
+ *     produced confusing autocomplete order.
+ *   - The index is plain arrays of strings, so search runs without
+ *     allocating new objects until we have a hit (helps GC under fast
+ *     typing).
+ *
+ * Public API:
+ *   PinyinSearch.buildIndex(champions) -> Index
+ *   PinyinSearch.search(query, index, limit?) -> Champion[]
+ *
+ * Backwards compat: CHAMPION_PINYIN is still exported as before, so any
+ * tooling that introspects it keeps working.
+ * ────────────────────────────────────────────────────────────────────── */
+const PinyinSearch = (() => {
+  /** Match weights — higher = ranked first. */
+  const SCORE = {
+    EXACT: 1000,
+    PREFIX_ID: 200,
+    PREFIX_NAME: 180,
+    PREFIX_PINYIN: 160,
+    PREFIX_ABBR: 140,
+    SUBSTR_NAME: 80,
+    SUBSTR_TITLE: 60,
+    SUBSTR_ID: 50,
+    SUBSTR_PINYIN: 40,
+    SUBSTR_ABBR: 30,
+  };
+
+  function buildIndex(champions) {
+    // Pre-compute all the haystacks once per app load. With ~170 champions
+    // this is trivial RAM but cuts per-keystroke work by ~10x.
+    return champions.map((c) => {
+      const py = CHAMPION_PINYIN[c.id] || "";
+      const [full = "", abbr = ""] = py.split("|");
+      return {
+        champ: c,
+        nameLower: c.name.toLowerCase(),
+        titleLower: (c.title || "").toLowerCase(),
+        idLower: c.id.toLowerCase(),
+        pinyinFull: full.toLowerCase(),
+        pinyinAbbr: abbr.toLowerCase(),
+        // Original Chinese name for direct comparison (already mixed-case-irrelevant)
+        nameRaw: c.name,
+        titleRaw: c.title || "",
+      };
+    });
+  }
+
+  function scoreEntry(q, qLower, entry) {
+    let best = 0;
+
+    // Exact matches dominate everything.
+    if (entry.idLower === qLower || entry.nameRaw === q) best = SCORE.EXACT;
+
+    // Prefix matches — strongest signal for autocomplete.
+    if (entry.idLower.startsWith(qLower)) best = Math.max(best, SCORE.PREFIX_ID);
+    if (entry.nameRaw.startsWith(q))      best = Math.max(best, SCORE.PREFIX_NAME);
+    if (entry.pinyinFull.startsWith(qLower)) best = Math.max(best, SCORE.PREFIX_PINYIN);
+    if (entry.pinyinAbbr.startsWith(qLower)) best = Math.max(best, SCORE.PREFIX_ABBR);
+
+    // Fall back to substring matches.
+    if (best === 0 && entry.nameRaw.includes(q))      best = SCORE.SUBSTR_NAME;
+    if (best === 0 && entry.titleRaw.includes(q))     best = SCORE.SUBSTR_TITLE;
+    if (best === 0 && entry.idLower.includes(qLower)) best = SCORE.SUBSTR_ID;
+    if (best === 0 && entry.pinyinFull.includes(qLower)) best = SCORE.SUBSTR_PINYIN;
+    if (best === 0 && entry.pinyinAbbr.includes(qLower)) best = SCORE.SUBSTR_ABBR;
+
+    return best;
+  }
+
+  function search(query, index, limit = 12) {
+    const q = (query || "").trim();
+    if (!q || !index || !index.length) return [];
+    const qLower = q.toLowerCase();
+
+    // Single pass: score, then partial-sort by truncating after collecting.
+    const hits = [];
+    for (const entry of index) {
+      const s = scoreEntry(q, qLower, entry);
+      if (s > 0) hits.push({ s, champ: entry.champ });
+    }
+    hits.sort((a, b) => b.s - a.s || a.champ.name.localeCompare(b.champ.name, "zh"));
+    return hits.slice(0, limit).map((h) => h.champ);
+  }
+
+  return { buildIndex, search };
+})();
