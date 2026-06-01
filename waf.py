@@ -73,6 +73,29 @@ def refresh_token(reason_url: str = _SOLVE_URL) -> None:
         log.info("Refreshed aws-waf-token via headless browser")
 
 
+def _launch_browser(p):
+    """Launch a headless browser for the challenge.
+
+    Prefer a browser already installed on the machine (Edge ships with every
+    Windows 10/11; Chrome is common too) so the packaged app doesn't need to
+    bundle ~150MB of Chromium. Fall back to Playwright's own Chromium if it was
+    installed via `playwright install chromium`.
+    """
+    last_err = None
+    for channel in ("msedge", "chrome"):
+        try:
+            return p.chromium.launch(channel=channel, headless=True)
+        except Exception as exc:  # noqa: BLE001 — try the next browser
+            last_err = exc
+    try:
+        return p.chromium.launch(headless=True)  # bundled Chromium, if present
+    except Exception as exc:  # noqa: BLE001 — nothing worked; give clear advice
+        raise RuntimeError(
+            "无法启动浏览器来通过 OP.GG 的 WAF 验证：系统未找到 Edge / Chrome，"
+            "也没有安装 Playwright 自带的 Chromium（可运行 playwright install chromium）"
+        ) from (last_err or exc)
+
+
 def _solve(url: str) -> str | None:
     try:
         from playwright.sync_api import sync_playwright
@@ -83,12 +106,7 @@ def _solve(url: str) -> str | None:
         ) from exc
 
     with sync_playwright() as p:
-        try:
-            browser = p.chromium.launch(headless=True)
-        except Exception as exc:  # noqa: BLE001 — surface a clear setup hint
-            raise RuntimeError(
-                "无法启动无头 Chromium 来通过 OP.GG 验证，请运行：playwright install chromium"
-            ) from exc
+        browser = _launch_browser(p)
         try:
             ctx = browser.new_context(user_agent=_USER_AGENT, locale="zh-CN")
             page = ctx.new_page()

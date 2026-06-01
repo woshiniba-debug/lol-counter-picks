@@ -14,7 +14,8 @@
 
 ## 已完成（续）
 - [x] **摇摆位双英雄克制（2026-06-01）**：新增 `/api/dual-counters/<a>/<b>` 路由 + `opgg.get_dual_counters()`，取两英雄克制列表交集、按 `max(score_a, score_b)` 升序排序；前端加“单个对手 / 摇摆位·两个对手”模式切换、双英雄选择槽、双对位胜率卡片。仅改 `app.py`/`opgg.py`/`index.html`/`main.js`/`style.css`，未改既有单英雄流程。**已端到端实跑验证**（盖伦+德莱厄斯，61 条结果，UI 截图正常）
-- [x] **突破 OP.GG AWS WAF 反爬（2026-06-01）**：新增 `waf.py`，用 Playwright 无头 Chromium 解一次 JS 挑战拿 `aws-waf-token` cookie 注入 requests 会话；`_fetch_rsc` 检测到 202 挑战页时自动重新取令牌并重试。requirements 加 `playwright`，部署需 `playwright install chromium`。实测该 token 只认 cookie+UA、不校验 TLS 指纹，所以抓取主路径仍是快速 requests
+- [x] **突破 OP.GG AWS WAF 反爬（2026-06-01）**：新增 `waf.py`，用 Playwright 浏览器解一次 JS 挑战拿 `aws-waf-token` cookie 注入 requests 会话；`_fetch_rsc` 检测到 202 挑战页时自动重新取令牌并重试。实测该 token 只认 cookie+UA、不校验 TLS 指纹，所以抓取主路径仍是快速 requests。浏览器优先用系统 `msedge → chrome`，回退自带 chromium
+- [x] **打包成桌面软件（2026-06-01）**：`launcher.py` 入口 + `LOLCounter.spec` + `build.bat`，PyInstaller 出 `dist\LOLCounter\LOLCounter.exe`（双击开浏览器，无需装 Python）。靠系统 Edge 过 WAF 不打包 Chromium，包体 ~138MB / zip ~52MB。frozen exe 实测单英雄+双英雄查询均正常
 
 ## 待办 / 可改进
 - [ ] 添加多语言支持（英文 / 中文切换）

@@ -8,6 +8,8 @@ thin: when OP.GG's HTML structure changes (it does), you only touch
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from typing import Any
 
 from flask import Flask, jsonify, render_template, request
@@ -15,7 +17,26 @@ from flask import Flask, jsonify, render_template, request
 import opgg
 import riot
 
-app = Flask(__name__)
+
+def _resource_base() -> str:
+    """Directory that holds `templates/` and `static/`.
+
+    When packaged with PyInstaller the data files are unpacked next to the
+    executable (onedir) or into a temp dir (onefile), exposed via
+    `sys._MEIPASS`. In a normal `python app.py` run it's just this file's
+    directory. Resolving it explicitly keeps Flask working in both modes.
+    """
+    if getattr(sys, "frozen", False):
+        return getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+_BASE = _resource_base()
+app = Flask(
+    __name__,
+    template_folder=os.path.join(_BASE, "templates"),
+    static_folder=os.path.join(_BASE, "static"),
+)
 
 # Module-level logger so users can wire their own handlers in production
 # without touching this file. Flask's logger is per-app and noisier.

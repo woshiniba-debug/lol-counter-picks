@@ -99,6 +99,14 @@ WantedBy=multi-user.target
 sudo systemctl enable --now lol-counter
 ```
 
+#### Option 4 — Packaged desktop app (double-click, no Python needed)
+
+```bash
+build.bat          # one-click build on Windows (runs PyInstaller)
+```
+
+Produces `dist\LOLCounter\LOLCounter.exe` — double-click and it opens your browser. It uses your **system Edge** to clear OP.GG's WAF, so no Chromium download is bundled. Hand the whole `dist\LOLCounter` folder (or the zip) to anyone and they can just run it.
+
 ### Usage
 
 1. Type the enemy champion's name in the search box
@@ -173,6 +181,14 @@ gunicorn -w 2 -b 0.0.0.0:5000 app:app
 ```
 
 配合 Nginx 反代并配置 HTTPS 即可公网访问。
+
+#### 方式四 — 打包成桌面软件（双击运行，无需装 Python / 浏览器内核）
+
+```bash
+build.bat          # Windows 一键打包（内部调用 PyInstaller）
+```
+
+生成 `dist\LOLCounter\LOLCounter.exe`，双击即自动开浏览器使用。它用**系统自带的 Edge** 通过 OP.GG 的 WAF 验证，所以不额外下载 Chromium。把整个 `dist\LOLCounter` 文件夹（或打包的 zip）拷给别人，对方双击就能跑。
 
 ### 使用方法
 

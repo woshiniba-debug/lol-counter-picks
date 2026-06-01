@@ -19,7 +19,9 @@
 | `riot.py` | Riot Data Dragon 英雄列表 / 版本 |
 | `cache.py` | TTL 内存缓存 |
 | `templates/index.html`、`static/` | 前端单页面 + JS / CSS |
-| `requirements.txt` | 依赖：flask, requests, playwright（+ `playwright install chromium`） |
+| `launcher.py` | 桌面版入口（起 Flask + 开浏览器，不用 reloader） |
+| `LOLCounter.spec`、`build.bat` | PyInstaller 打包配置 + 一键打包脚本 |
+| `requirements.txt` | 依赖：flask, requests, playwright |
 
 ## API 路由
 - `GET /api/champions` — 从 Data Dragon 获取英雄列表（缓存 24h）
@@ -34,8 +36,9 @@
 - **dual-counters（摇摆位）**：取两个英雄克制列表的交集，按两个对位中“较弱一方”的 confidence_score（即 `max(score_a, score_b)`）升序排序——保证推荐英雄对两个对手都稳，而非只克制其中一个
 
 ## 开发注意事项
-- **OP.GG AWS WAF 反爬（2026-06-01 解决）**：OP.GG 在 `op.gg/lol/...` 前加了 AWS WAF，直接 `requests` 会拿到 `202` + JS 挑战页（`gokuProps`/`awsWafCookieDomainList`），无业务数据。解决方案见 `waf.py`：用 **Playwright 无头 Chromium 当"令牌发放器"**——解一次挑战拿到 `aws-waf-token` cookie 注入到共享 `requests` 会话，之后全部抓取仍走快速 `requests` 路径（实测该 token 只认 cookie+UA，不校验 TLS 指纹）。仅在 `_fetch_rsc` 检测到挑战页（202）时才唤醒浏览器重新拿令牌，加锁 + 30s 去重避免并发时重复启动浏览器。
-- **首次部署需装浏览器**：`pip install -r requirements.txt` 后必须再跑一次 `playwright install chromium`，否则过不了 WAF。
+- **OP.GG AWS WAF 反爬（2026-06-01 解决）**：OP.GG 在 `op.gg/lol/...` 前加了 AWS WAF，直接 `requests` 会拿到 `202` + JS 挑战页（`gokuProps`/`awsWafCookieDomainList`），无业务数据。解决方案见 `waf.py`：用 **Playwright 浏览器当"令牌发放器"**——解一次挑战拿到 `aws-waf-token` cookie 注入到共享 `requests` 会话，之后全部抓取仍走快速 `requests` 路径（实测该 token 只认 cookie+UA，不校验 TLS 指纹）。仅在 `_fetch_rsc` 检测到挑战页（202）时才唤醒浏览器重新拿令牌，加锁 + 30s 去重避免并发时重复启动浏览器。
+- **浏览器优先级**：`waf.py` 启动顺序 `msedge → chrome → 自带 chromium`。Win10/11 一定有 Edge，所以**通常不用** `playwright install chromium`；只有在无 Edge/Chrome 的环境才需要它。
+- **打包桌面版（2026-06-01）**：`build.bat` → PyInstaller 按 `LOLCounter.spec` 出 `dist\LOLCounter\LOLCounter.exe`（onedir，约 138MB）。入口是 `launcher.py`（不能用 app.py 的 debug reloader，frozen 下会反复重启 exe）。`app.py` 用 `sys._MEIPASS` 解析 templates/static 路径。**不打包 Chromium**，靠系统 Edge，所以包体小。
 - `Accept-Encoding` 不能含 `br`（brotli），requests 不解，会乱码（见 http_client.py）
 - OP.GG 页面结构可能随版本更新变化，爬虫需定期验证
 - `Accept-Encoding` 不能包含 `br`（brotli），requests 不支持，会导致乱码
