@@ -84,6 +84,20 @@ def api_counters(champion_id: str):
         return _json_error(str(exc))
 
 
+@app.route("/api/dual-counters/<champion_a>/<champion_b>")
+def api_dual_counters(champion_a: str, champion_b: str):
+    """Picks that counter both champions — for flex/swing-lane blind picks."""
+    position = _clean_position()
+    tier = _clean_tier()
+    try:
+        return _json_ok(
+            opgg.get_dual_counters(champion_a, champion_b, position, tier)
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Failed to scrape dual counters for %s + %s", champion_a, champion_b)
+        return _json_error(str(exc))
+
+
 @app.route("/api/runes/<champion_id>")
 def api_runes(champion_id: str):
     position = _clean_position()

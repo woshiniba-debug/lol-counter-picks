@@ -59,8 +59,15 @@
     champById: {},
     searchIndex: null,
     ddVersion: "",
-    opponent: null,
+    // "single": one opponent → counters. "dual": two opponents (swing lane) →
+    // picks that counter both.
+    mode: "single",
+    opponent: null,     // slot A in dual mode
+    opponentB: null,    // slot B (dual mode only)
     countersRaw: null,
+    // Parsed list currently rendered in the grid (single- or dual-shaped).
+    // selectCounter indexes into this so it stays mode-agnostic.
+    countersParsed: [],
     selectedCounterIdx: null,
     position: "",
     tier: "",
@@ -72,15 +79,20 @@
   const dom = {};
 
   function cacheDom() {
+    dom.modeBar       = document.querySelector(".mode-bar");
     dom.searchWrapper = document.querySelector(".search-wrapper");
+    dom.searchLabel   = document.querySelector(".search-label");
     dom.searchInput   = document.getElementById("champion-search");
     dom.dropdown      = document.getElementById("search-dropdown");
     dom.banner        = document.getElementById("selected-banner");
+    dom.dualBanner    = document.getElementById("dual-banner");
     dom.positionBar   = document.getElementById("position-bar");
     dom.tierBar       = document.getElementById("tier-bar");
     dom.countersSect  = document.getElementById("counters-section");
     dom.countersTitle = document.getElementById("counters-title");
     dom.countersGrid  = document.getElementById("counters-grid");
+    dom.singleSubtitle = document.getElementById("single-subtitle");
+    dom.dualSubtitle  = document.getElementById("dual-subtitle");
     dom.opponentName  = document.getElementById("opponent-name");
     dom.positionDesc  = document.getElementById("position-desc");
     dom.tierDesc      = document.getElementById("tier-desc");
@@ -116,6 +128,20 @@
     if (!n) return "0";
     if (n >= 10000) return (n / 10000).toFixed(1) + " 万";
     return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  /** Normalize a win rate to a percentage (handles legacy 0–1 sources). */
+  function normWr(wr) {
+    const n = wr ?? 50;
+    return n <= 1 ? n * 100 : n;
+  }
+
+  /** Map an (opponent) win rate to a {cls, fill} colour pair. Shared by the
+   *  single- and dual-counter cards so the thresholds stay in one place. */
+  function wrColor(wrNum) {
+    if (wrNum < WR_GOOD_BELOW) return { cls: "good", fill: "#2ecc71" };
+    if (wrNum > WR_BAD_ABOVE)  return { cls: "bad",  fill: "#ff5252" };
+    return { cls: "neutral", fill: "#f5c518" };
   }
 
   function loadingHtml() {
@@ -232,6 +258,18 @@
       if (champ) selectOpponent(champ);
     });
 
+    // Mode toggle (single vs. swing-lane dual).
+    dom.modeBar.addEventListener("click", (e) => {
+      const btn = e.target.closest(".mode-btn");
+      if (btn) setMode(btn.dataset.mode);
+    });
+
+    // Dual-banner slot removal (× buttons), delegated.
+    dom.dualBanner.addEventListener("click", (e) => {
+      const rm = e.target.closest(".dual-slot-remove");
+      if (rm) clearDualSlot(rm.dataset.slot);
+    });
+
     // Position & tier buttons — also delegated. The original code attached
     // one listener per button at boot, which was fine; delegation here is
     // a minor cleanup and lets us re-render the buttons safely later.
@@ -326,33 +364,149 @@
     dom.dropdown.classList.remove("hidden");
   }
 
-  /* ── Opponent selection ────────────────────────────────────────────── */
-  function selectOpponent(champ) {
-    state.opponent = champ;
-    dom.searchInput.value = champ.name;
+  /* ── Mode switching ────────────────────────────────────────────────── */
+  function setMode(mode) {
+    if ((mode !== "single" && mode !== "dual") || mode === state.mode) return;
+    state.mode = mode;
+    for (const btn of dom.modeBar.querySelectorAll(".mode-btn")) {
+      const on = btn.dataset.mode === mode;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    }
+
+    dom.searchLabel.textContent =
+      mode === "dual" ? "选择对方可能的两个英雄" : "选择对方英雄";
+    dom.searchInput.value = "";
     dom.dropdown.classList.add("hidden");
 
-    // Banner
+    if (mode === "dual") {
+      dom.banner.classList.remove("visible");
+      dom.dualBanner.classList.remove("hidden");
+      renderDualBanner();
+    } else {
+      dom.dualBanner.classList.add("hidden");
+      if (state.opponent) {
+        renderSingleBanner(state.opponent);
+        dom.banner.classList.add("visible");
+        dom.opponentName.textContent = state.opponent.name;
+      }
+    }
+
+    refreshFiltersVisibility();
+    reloadCounters();
+  }
+
+  /* ── Opponent selection ────────────────────────────────────────────── */
+  function selectOpponent(champ) {
+    dom.dropdown.classList.add("hidden");
+
+    if (state.mode === "dual") {
+      const wasEmpty = !state.opponent && !state.opponentB;
+      assignDualSlot(champ);
+      dom.searchInput.value = "";  // clear so the next pick is easy to search
+      renderDualBanner();
+      if (wasEmpty) resetFilters();
+    } else {
+      state.opponent = champ;
+      dom.searchInput.value = champ.name;
+      renderSingleBanner(champ);
+      dom.banner.classList.add("visible");
+      dom.opponentName.textContent = champ.name;
+      resetFilters();
+    }
+
+    refreshFiltersVisibility();
+    reloadCounters();
+  }
+
+  function renderSingleBanner(champ) {
     const img = dom.banner.querySelector("img");
     img.src = champIconUrl(champ);
     img.alt = champ.name;
     dom.banner.querySelector(".info h3").textContent = champ.name;
-    dom.banner.querySelector(".info p").textContent = champ.title;
-    dom.banner.classList.add("visible");
+    dom.banner.querySelector(".info p").textContent = champ.title || "";
+  }
 
-    // Reset filters to defaults but don't reload yet (loadCounters below
-    // will fetch once with the correct params).
-    setPosition("", /* reload */ false);
-    setTier("", /* reload */ false);
-    dom.positionBar.classList.remove("hidden");
-    dom.tierBar.classList.remove("hidden");
+  /* ── Dual-opponent slots ───────────────────────────────────────────── */
+  function assignDualSlot(champ) {
+    if (!state.opponent) state.opponent = champ;
+    else if (!state.opponentB) state.opponentB = champ;
+    else state.opponentB = champ;  // both full → replace the second pick
+  }
 
-    dom.opponentName.textContent = champ.name;
+  function clearDualSlot(slot) {
+    if (slot === "a") {
+      // Promote B into A so slot A stays the "first" pick.
+      state.opponent = state.opponentB;
+      state.opponentB = null;
+    } else {
+      state.opponentB = null;
+    }
+    renderDualBanner();
+    refreshFiltersVisibility();
+    reloadCounters();
+  }
 
-    loadCounters(champ, state.position, state.tier);
+  function renderDualBanner() {
+    renderDualSlot("a", state.opponent);
+    renderDualSlot("b", state.opponentB);
+  }
+
+  function renderDualSlot(slot, champ) {
+    const el = dom.dualBanner.querySelector(`.dual-slot[data-slot="${slot}"]`);
+    if (!el) return;
+    if (!champ) {
+      el.classList.remove("filled");
+      const hint = slot === "a"
+        ? "点击上方搜索，添加可能的英雄 ①"
+        : "再添加可能的英雄 ②";
+      el.innerHTML = `<div class="dual-slot-empty">${hint}</div>`;
+      return;
+    }
+    el.classList.add("filled");
+    el.innerHTML = `
+      <img src="${escapeHtml(champIconUrl(champ))}" alt="${escapeHtml(champ.name)}" />
+      <div class="dual-slot-info">
+        <div class="dual-slot-name">${escapeHtml(champ.name)}</div>
+        <div class="dual-slot-title">${escapeHtml(champ.title || "")}</div>
+      </div>
+      <button type="button" class="dual-slot-remove" data-slot="${slot}"
+              aria-label="移除 ${escapeHtml(champ.name)}">×</button>`;
   }
 
   /* ── Filter selection ──────────────────────────────────────────────── */
+  function resetFilters() {
+    setPosition("", /* reload */ false);
+    setTier("", /* reload */ false);
+  }
+
+  function refreshFiltersVisibility() {
+    const ready = state.mode === "dual"
+      ? !!(state.opponent || state.opponentB)
+      : !!state.opponent;
+    dom.positionBar.classList.toggle("hidden", !ready);
+    dom.tierBar.classList.toggle("hidden", !ready);
+  }
+
+  /** Fetch whatever the current mode + selection supports, or hide results
+   *  if the selection is incomplete (e.g. dual mode with only one pick). */
+  function reloadCounters() {
+    state.selectedCounterIdx = null;
+    dom.runesSect.classList.remove("visible");
+
+    if (state.mode === "dual") {
+      if (state.opponent && state.opponentB) {
+        loadDualCounters(state.opponent, state.opponentB, state.position, state.tier);
+      } else {
+        dom.countersSect.classList.remove("visible");
+      }
+    } else if (state.opponent) {
+      loadCounters(state.opponent, state.position, state.tier);
+    } else {
+      dom.countersSect.classList.remove("visible");
+    }
+  }
+
   function setPosition(position, reload = true) {
     state.position = position;
     for (const btn of document.querySelectorAll(".pos-btn")) {
@@ -360,9 +514,7 @@
       btn.setAttribute("aria-pressed", btn.dataset.position === position ? "true" : "false");
     }
     dom.positionDesc.textContent = position ? `（${POSITION_LABELS[position]}）` : "";
-    if (reload && state.opponent) {
-      loadCounters(state.opponent, position, state.tier);
-    }
+    if (reload) reloadCounters();
   }
 
   function setTier(tier, reload = true) {
@@ -372,15 +524,15 @@
       btn.setAttribute("aria-pressed", btn.dataset.tier === tier ? "true" : "false");
     }
     dom.tierDesc.textContent = TIER_LABELS[tier] ? `（${TIER_LABELS[tier]}）` : "";
-    if (reload && state.opponent) {
-      loadCounters(state.opponent, state.position, tier);
-    }
+    if (reload) reloadCounters();
   }
 
   /* ── Counter loading ───────────────────────────────────────────────── */
   async function loadCounters(champ, position = "", tier = "") {
     const posLabel = POSITION_LABELS[position] || "全部路线";
     dom.countersSect.classList.add("visible");
+    dom.singleSubtitle.classList.remove("hidden");
+    dom.dualSubtitle.classList.add("hidden");
     dom.countersTitle.textContent = `克制 ${champ.name}（${posLabel}）的英雄推荐`;
     dom.countersGrid.innerHTML = loadingHtml();
 
@@ -434,24 +586,20 @@
   function renderCounters(counters, opponent) {
     // Build the entire grid HTML in one pass then assign — single reflow
     // instead of N appends.
+    state.countersParsed = counters;
     const html = counters.map((c, i) => renderCounterCard(c, i, opponent)).join("");
     dom.countersGrid.innerHTML = html;
   }
 
   function renderCounterCard(c, i, opponent) {
     // OP.GG returns WR as a percentage (e.g. 47.3); some legacy data
-    // sources used 0–1. Detect and normalize.
-    const wr = c.winRate;
-    const wrNum = wr <= 1 ? wr * 100 : wr;
+    // sources used 0–1. normWr handles both.
+    const wrNum = normWr(c.winRate);
     const wrPct = wrNum.toFixed(1);
-
-    // Class + colour for both the value text and the bar fill.
-    // Colours mirror the CSS --wr-* tokens; kept inline because the bar
-    // fill uses an inline style attribute for the dynamic width.
-    let wrClass = "neutral";
-    let fillColor = "#f5c518";
-    if (wrNum < WR_GOOD_BELOW)      { wrClass = "good"; fillColor = "#2ecc71"; }
-    else if (wrNum > WR_BAD_ABOVE)  { wrClass = "bad";  fillColor = "#ff5252"; }
+    // Class + colour for both the value text and the bar fill. The bar fill
+    // uses an inline style attribute for the dynamic width, so we need the
+    // hex too (not just the CSS class).
+    const { cls: wrClass, fill: fillColor } = wrColor(wrNum);
     const fillPct = Math.min(100, Math.max(0, wrNum));
 
     const gameCount = c.gameCount ?? 0;
@@ -481,13 +629,118 @@
       </div>`;
   }
 
+  /* ── Dual counters (swing lane) ────────────────────────────────────── */
+  async function loadDualCounters(a, b, position = "", tier = "") {
+    const posLabel = POSITION_LABELS[position] || "全部路线";
+    dom.countersSect.classList.add("visible");
+    dom.singleSubtitle.classList.add("hidden");
+    dom.dualSubtitle.classList.remove("hidden");
+    dom.countersTitle.textContent =
+      `同时克制 ${a.name} 与 ${b.name}（${posLabel}）的英雄推荐`;
+    dom.dualSubtitle.innerHTML =
+      `以下英雄对 <strong>${escapeHtml(a.name)}</strong> 和 ` +
+      `<strong>${escapeHtml(b.name)}</strong> 的对位胜率都较低，` +
+      `按两个对位中“较弱的一方”加权排序——越靠前，无论对方最终锁定谁都越稳。` +
+      `点击英雄卡片查看符文推荐。`;
+    dom.countersGrid.innerHTML = loadingHtml();
+
+    dom.runesSect.classList.remove("visible");
+    state.selectedCounterIdx = null;
+
+    const params = new URLSearchParams();
+    if (position) params.set("position", position);
+    if (tier) params.set("tier", tier);
+    const qs = params.toString() ? `?${params}` : "";
+
+    const ctrl = rotateAbort("counters");
+    try {
+      const url =
+        `/api/dual-counters/${encodeURIComponent(a.id)}/${encodeURIComponent(b.id)}${qs}`;
+      const res = await fetch(url, { signal: ctrl.signal });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "加载失败");
+
+      state.countersRaw = json.data;
+      const counters = parseDualCounters(json.data);
+      if (!counters.length) {
+        dom.countersGrid.innerHTML =
+          `<div class="error-msg">这两个英雄没有公共的高胜率克制英雄。试试分别单独查询，或更换路线 / 段位。</div>`;
+        return;
+      }
+      renderDualCounters(counters, a, b);
+    } catch (e) {
+      if (e.name === "AbortError") return;  // user moved on; silently drop
+      dom.countersGrid.innerHTML = errorHtml(e.message, opggCounterUrl(a.id, position));
+    }
+  }
+
+  /** Backend returns list pre-sorted by combined_score ascending. */
+  function parseDualCounters(raw) {
+    const list = Array.isArray(raw) ? raw : [];
+    return list
+      .filter((item) => item && item.champion)
+      .map((item) => ({
+        champId: item.champion.key || "",
+        name: item.champion.name || "",
+        image: item.champion.image_url || "",
+        combined: item.combined_score ?? 50,
+        wrA: item.vs_a ? (item.vs_a.win_rate ?? 50) : 50,
+        playA: item.vs_a ? (item.vs_a.play ?? null) : null,
+        wrB: item.vs_b ? (item.vs_b.win_rate ?? 50) : 50,
+        playB: item.vs_b ? (item.vs_b.play ?? null) : null,
+      }));
+  }
+
+  function renderDualCounters(counters, a, b) {
+    state.countersParsed = counters;
+    const html = counters.map((c, i) => renderDualCounterCard(c, i, a, b)).join("");
+    dom.countersGrid.innerHTML = html;
+  }
+
+  function renderDualCounterCard(c, i, a, b) {
+    const imgSrc = resolveCounterImg(c);
+    const safeName = escapeHtml(c.name);
+    return `
+      <div class="counter-card dual" data-idx="${i}" role="button" tabindex="0"
+           aria-label="选择 ${safeName} 作为反制英雄">
+        <div class="counter-card-inner">
+          <div class="rank-badge">${i + 1}</div>
+          <img src="${escapeHtml(imgSrc)}" alt="${safeName}"
+               onerror="this.onerror=null;this.src='${PLACEHOLDER_IMG}'" loading="lazy" />
+          <div class="champ-name">${safeName}</div>
+          <div class="dual-wr-rows">
+            ${dualWrRow(a.name, c.wrA, c.playA)}
+            ${dualWrRow(b.name, c.wrB, c.playB)}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  /** One opponent's WR row inside a dual card: name + value + mini bar. */
+  function dualWrRow(opponentName, wr, play) {
+    const wrNum = normWr(wr);
+    const { cls, fill } = wrColor(wrNum);
+    const fillPct = Math.min(100, Math.max(0, wrNum));
+    const lowSample = play != null && play > 0 && play < LOW_SAMPLE_THRESHOLD;
+    return `
+      <div class="dual-wr-row">
+        <div class="dual-wr-head">
+          <span class="dual-wr-name">vs ${escapeHtml(opponentName)}${lowSample ? " ⚠" : ""}</span>
+          <span class="dual-wr-val ${cls}">${wrNum.toFixed(1)}%</span>
+        </div>
+        <div class="wr-bar-bg" role="progressbar" aria-valuenow="${wrNum.toFixed(1)}"
+             aria-valuemin="0" aria-valuemax="100">
+          <div class="wr-bar-fill" style="width:${fillPct}%;background:${fill}"></div>
+        </div>
+      </div>`;
+  }
+
   /* ── Counter selection → runes ─────────────────────────────────────── */
   function selectCounter(idx) {
     for (const el of dom.countersGrid.querySelectorAll(".counter-card")) {
       el.classList.toggle("selected", parseInt(el.dataset.idx, 10) === idx);
     }
-    const counters = parseCounters(state.countersRaw);
-    const c = counters[idx];
+    const c = state.countersParsed[idx];
     if (!c) return;
     state.selectedCounterIdx = idx;
     loadRunes(c, state.position);

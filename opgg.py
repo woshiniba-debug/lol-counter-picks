@@ -24,6 +24,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+import waf
 from cache import cache
 from http_client import session
 
@@ -74,8 +75,18 @@ _RSC_PUSH_RE = re.compile(
 
 
 def _fetch_rsc(url: str) -> str:
-    """Fetch an OP.GG page and return all RSC payloads, concatenated & unescaped."""
+    """Fetch an OP.GG page and return all RSC payloads, concatenated & unescaped.
+
+    OP.GG is behind AWS WAF. If the response is a challenge page (HTTP 202),
+    we mint a fresh `aws-waf-token` via a headless browser (see `waf.py`) and
+    retry once on the fast requests path.
+    """
     resp = session.get(url, timeout=20)
+    if waf.is_challenge(resp):
+        waf.refresh_token(url)
+        resp = session.get(url, timeout=20)
+        if waf.is_challenge(resp):
+            raise RuntimeError("OP.GG 返回了 AWS WAF 验证页且自动通过失败，请稍后重试")
     resp.raise_for_status()
 
     parts: list[str] = []
@@ -242,6 +253,69 @@ def get_counters(champion_id: str, position: str = "", tier: str = "") -> list[d
         result = _scrape_counters_raw(champion_id, position, tier)
 
     result.sort(key=lambda x: x["confidence_score"])
+    cache.set(cache_key, result, ttl=COUNTERS_TTL)
+    return result
+
+
+# ── Dual counters (swing / flex pick) ──────────────────────────────────────────
+
+def get_dual_counters(
+    champion_a: str, champion_b: str, position: str = "", tier: str = ""
+) -> list[dict]:
+    """Picks that counter BOTH `champion_a` and `champion_b`.
+
+    Use case: the enemy laner is a flex/swing pick — you don't yet know which
+    of two champions they'll lock. We want a single blind pick that holds up
+    against either one.
+
+    We intersect each opponent's counter list (a champion only qualifies if it
+    appears as a counter to *both*), then rank by the *worse* of the two
+    matchups: ``combined_score = max(score_vs_a, score_vs_b)``. Taking the max
+    (not the average) is deliberate — a pick that crushes A but loses to B is
+    useless when the enemy might pick B, so we judge each candidate by its weak
+    side. Lower combined_score = more reliable against both. Sorted ascending.
+
+    Each returned item keeps the per-opponent breakdown so the UI can show how
+    the pick fares against A and against B individually.
+    """
+    cache_key = f"dual_{champion_a.lower()}_{champion_b.lower()}_{position}_{tier}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    counters_a = get_counters(champion_a, position, tier)
+    counters_b = get_counters(champion_b, position, tier)
+
+    by_key_b = {item["champion"]["key"]: item for item in counters_b}
+    # Don't recommend the two opponents themselves as the answer.
+    excluded = {champion_a.lower(), champion_b.lower()}
+
+    result: list[dict] = []
+    for item_a in counters_a:
+        key = item_a["champion"]["key"]
+        if key.lower() in excluded:
+            continue
+        item_b = by_key_b.get(key)
+        if item_b is None:
+            continue  # only keep champions that counter both
+
+        combined = max(item_a["confidence_score"], item_b["confidence_score"])
+        result.append({
+            "champion": item_a["champion"],
+            "combined_score": combined,
+            "vs_a": {
+                "win_rate": item_a["win_rate"],
+                "confidence_score": item_a["confidence_score"],
+                "play": item_a["play"],
+            },
+            "vs_b": {
+                "win_rate": item_b["win_rate"],
+                "confidence_score": item_b["confidence_score"],
+                "play": item_b["play"],
+            },
+        })
+
+    result.sort(key=lambda x: x["combined_score"])
     cache.set(cache_key, result, ttl=COUNTERS_TTL)
     return result
 

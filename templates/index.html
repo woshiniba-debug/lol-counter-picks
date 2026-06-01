@@ -27,6 +27,16 @@
 
 <main>
 
+  <!-- Query mode toggle: single opponent vs. swing-lane (two opponents) -->
+  <div class="mode-bar" role="tablist" aria-label="查询模式">
+    <button type="button" class="mode-btn active" data-mode="single" role="tab" aria-selected="true">
+      单个对手
+    </button>
+    <button type="button" class="mode-btn" data-mode="dual" role="tab" aria-selected="false">
+      摇摆位 · 两个对手
+    </button>
+  </div>
+
   <!-- Search -->
   <div class="search-wrapper">
     <label class="search-label" for="champion-search">选择对方英雄</label>
@@ -59,6 +69,17 @@
       <p>称号</p>
     </div>
     <span class="tag">对方选择</span>
+  </div>
+
+  <!-- Dual-opponent banner (swing-lane mode) — two slots, filled A then B -->
+  <div id="dual-banner" class="dual-banner hidden" aria-live="polite">
+    <div class="dual-slot" data-slot="a">
+      <div class="dual-slot-empty">点击上方搜索，添加可能的英雄 ①</div>
+    </div>
+    <span class="dual-vs" aria-hidden="true">＋</span>
+    <div class="dual-slot" data-slot="b">
+      <div class="dual-slot-empty">再添加可能的英雄 ②</div>
+    </div>
   </div>
 
   <!-- Position selector (shown after champion is selected) -->
@@ -102,12 +123,13 @@
     <div class="section-title">
       <span id="counters-title">克制英雄推荐</span>
     </div>
-    <p class="counters-subtitle">
+    <p id="single-subtitle" class="counters-subtitle">
       以下英雄对 <strong id="opponent-name"></strong>
       <span id="position-desc"></span>
       <span id="tier-desc"></span>
       的对位胜率较低，排名综合胜率与对局数加权，越靠前克制效果越可靠，点击英雄卡片查看符文推荐。
     </p>
+    <p id="dual-subtitle" class="counters-subtitle hidden"></p>
     <div id="counters-grid"></div>
   </section>
 
